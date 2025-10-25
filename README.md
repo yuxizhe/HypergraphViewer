@@ -2,7 +2,7 @@
 
 A Hypergraph Visualization Framework in JavaScript. Support JSON/HIF/Hypergraph-DB/Hyper-RAG
 
-## Hypergraph-DB
+DEMO page: https://yuxizhe.github.io/HypergraphViewer/
 
 <img width="100%" alt="image" src="https://github.com/user-attachments/assets/f9c36051-43c5-4e49-a725-08276aa99833" />
 
@@ -14,7 +14,6 @@ A Hypergraph Visualization Framework in JavaScript. Support JSON/HIF/Hypergraph-
 
 ## Features
 
-- 🔍 **Search Functionality**: Search by vertex ID, entity type, or description
 - 📊 **Dual Mode Visualization**:
   - Hypergraph Mode: Displays hyperedges and bubble collections
   - Graph Mode: Traditional node-edge graph visualization
