@@ -59,8 +59,8 @@ export default function HypergraphViewer() {
                 await loadVertices(1, searchTerm, sortBy, sortOrder);
 
                 // Clear selected vertex since the data might have changed
-                setSelectedVertex("");
-                setGraphData(null);
+                setSelectedVertex(result.data[0].id);
+                // setGraphData(null);
             } else {
                 setDataSourceError(result.error);
             }

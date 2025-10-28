@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 
 export default function DataSourceSelector({ onDataSourceChange, currentSource, loading }) {
     const [sourceType, setSourceType] = useState(currentSource?.type || 'static');
-    const [url, setUrl] = useState(currentSource?.url || '');
+    const [url, setUrl] = useState(currentSource?.url || 'https://yuxizhe.github.io/HypergraphViewer/publications_main_component.hif.json');
     const [file, setFile] = useState(null);
 
     const handleSourceTypeChange = (type) => {
@@ -62,7 +62,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
                     </label>
 
                     {sourceType === 'remote' && (
-                        <form onSubmit={handleUrlSubmit} className="ml-6 space-y-2">
+                        <form onSubmit={handleUrlSubmit} className="space-y-2">
                             <input
                                 type="url"
                                 value={url}
