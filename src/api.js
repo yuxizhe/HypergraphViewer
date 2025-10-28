@@ -1,8 +1,67 @@
 import { datas } from './data.js';
+import { loadHIFFromURL, loadHIFFromFile, validateHIFData } from './hifParser.js';
+
+// Data source manager
+class DataSourceManager {
+    constructor() {
+        this.currentData = datas;
+        this.currentSource = { type: 'static' };
+    }
+
+    async setDataSource(source) {
+        try {
+            let newData;
+
+            switch (source.type) {
+                case 'static':
+                    newData = datas;
+                    break;
+
+                case 'remote':
+                    newData = await loadHIFFromURL(source.url);
+                    break;
+
+                case 'file':
+                    newData = await loadHIFFromFile(source.file);
+                    break;
+
+                default:
+                    throw new Error(`Unsupported data source type: ${source.type}`);
+            }
+
+            if (!validateHIFData(newData)) {
+                throw new Error('Data format validation failed');
+            }
+
+            this.currentData = newData;
+            this.currentSource = source;
+
+            return { success: true, data: newData };
+        } catch (error) {
+            console.error('Data source setup failed:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    getCurrentData() {
+        return this.currentData;
+    }
+
+    getCurrentSource() {
+        return this.currentSource;
+    }
+}
+
+// Global data source manager instance
+const dataSourceManager = new DataSourceManager();
+
+// Export data source manager for external use
+export { dataSourceManager };
 
 // API call functions
 export const fetchDatabaseInfo = async () => {
-    return Promise.resolve(datas.database);
+    const data = dataSourceManager.getCurrentData();
+    return Promise.resolve(data.database);
 };
 
 export const fetchVertices = async (
@@ -12,8 +71,15 @@ export const fetchVertices = async (
     sortBy,
     sortOrder
 ) => {
+    const data = dataSourceManager.getCurrentData();
     const toLower = (v) => (v ?? "").toString().toLowerCase();
-    let list = Array.isArray(datas.vertices) ? datas.vertices : [];
+    // graphs 转为数组，id 是 key
+    let list = Object.keys(data.graphs).map(key => ({
+        id: key,
+        ...data.vertices.find(v => v.id === key),
+        ...data.graphs[key],
+        degree: Object.keys(data.graphs[key].vertices).length,
+    }));
 
     if (search) {
         const q = toLower(search);
@@ -42,15 +108,16 @@ export const fetchVertices = async (
     const total_pages = Math.max(1, Math.ceil(total / pageSize));
     const cur = Math.min(Math.max(1, page), total_pages);
     const start = (cur - 1) * pageSize;
-    const data = list.slice(start, start + pageSize);
+    const resultData = list.slice(start, start + pageSize);
     return Promise.resolve({
-        data,
+        data: resultData,
         pagination: { page: cur, page_size: pageSize, total, total_pages },
     });
 };
 
 export const fetchGraphData = async (vertexId) => {
-    const entry = datas.graphs[vertexId];
+    const data = dataSourceManager.getCurrentData();
+    const entry = data.graphs[vertexId];
     if (entry && entry.vertices && entry.edges) {
         return Promise.resolve({
             vertices: entry.vertices,

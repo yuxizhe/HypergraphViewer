@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { generateEntityTypeColors } from '../constants.js';
-import { fetchDatabaseInfo, fetchVertices, fetchGraphData } from '../api.js';
+import { fetchDatabaseInfo, fetchVertices, fetchGraphData, dataSourceManager } from '../api.js';
 import { processGraphData } from '../dataProcessor.js';
 import Sidebar from './Sidebar.jsx';
 import GraphContainer from './GraphContainer.jsx';
@@ -31,11 +31,46 @@ export default function HypergraphViewer() {
     const [visualizationMode, setVisualizationMode] = useState("hyper");
     const [hoverHyperedge, setHoverHyperedge] = useState(null);
     const [hoverNode, setHoverNode] = useState(null);
+    const [currentDataSource, setCurrentDataSource] = useState({ type: 'static' });
+    const [dataSourceLoading, setDataSourceLoading] = useState(false);
+    const [dataSourceError, setDataSourceError] = useState("");
 
     // Generate entity type color mapping
     const entityTypeColors = useMemo(() => {
         return generateEntityTypeColors(vertices);
     }, [vertices]);
+
+    // Handle data source change
+    const handleDataSourceChange = async (newSource) => {
+        setDataSourceLoading(true);
+        setDataSourceError("");
+
+        try {
+            const result = await dataSourceManager.setDataSource(newSource);
+
+            if (result.success) {
+                setCurrentDataSource(newSource);
+
+                // Refresh all data after successful data source change
+                const dbInfo = await fetchDatabaseInfo();
+                setDatabaseInfo(dbInfo);
+
+                // Reload vertices with current search/sort settings
+                await loadVertices(1, searchTerm, sortBy, sortOrder);
+
+                // Clear selected vertex since the data might have changed
+                setSelectedVertex("");
+                setGraphData(null);
+            } else {
+                setDataSourceError(result.error);
+            }
+        } catch (error) {
+            console.error("Data source switch failed:", error);
+            setDataSourceError(error.message);
+        } finally {
+            setDataSourceLoading(false);
+        }
+    };
 
     // Load database info
     useEffect(() => {
@@ -164,17 +199,22 @@ export default function HypergraphViewer() {
 
     return (
         <div className="flex h-screen bg-linear-to-br from-gray-50 to-gray-100">
-            {/* Sidebar */}
+            {/* Sidebar with integrated Data Source Selector */}
             <Sidebar
                 databaseInfo={databaseInfo}
                 searchTerm={searchTerm}
                 setSearchTerm={setSearchTerm}
                 vertices={vertices}
-                loadingVertices={loadingVertices}
+                loadingVertices={loadingVertices || dataSourceLoading}
                 selectedVertex={selectedVertex}
                 setSelectedVertex={setSelectedVertex}
                 pagination={pagination}
                 handlePageChange={handlePageChange}
+                // Data source props
+                onDataSourceChange={handleDataSourceChange}
+                currentDataSource={currentDataSource}
+                dataSourceLoading={dataSourceLoading}
+                dataSourceError={dataSourceError}
             />
 
             {/* Main Content */}
