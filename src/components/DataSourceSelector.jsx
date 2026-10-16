@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useI18n } from '../i18n.jsx';
 
 export default function DataSourceSelector({ onDataSourceChange, currentSource, loading }) {
+    const { t } = useI18n();
     const [sourceType, setSourceType] = useState(currentSource?.type || 'static');
     const [url, setUrl] = useState(currentSource?.url || '');
     const [file, setFile] = useState(null);
@@ -30,7 +32,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
     return (
         <div className="mb-6">
             <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
-                Data Source
+                {t("dataSource")}
             </div>
 
             <div className="space-y-4">
@@ -44,7 +46,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
                         onChange={() => handleSourceTypeChange('static')}
                         className="text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">Use Default Data</span>
+                    <span className="text-sm font-medium text-gray-700">{t("useDefaultData")}</span>
                 </label>
 
                 {/* Remote URL Option */}
@@ -58,7 +60,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
                             onChange={() => handleSourceTypeChange('remote')}
                             className="text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="text-sm font-medium text-gray-700">Remote HIF URL</span>
+                        <span className="text-sm font-medium text-gray-700">{t("remoteHif")}</span>
                     </label>
 
                     {sourceType === 'remote' && (
@@ -67,7 +69,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
                                 type="url"
                                 value={url}
                                 onChange={(e) => setUrl(e.target.value)}
-                                placeholder="Enter HIF file URL"
+                                placeholder={t("hifUrlPlaceholder")}
                                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
                                 disabled={loading}
                             />
@@ -76,7 +78,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
                                 disabled={!url.trim() || loading}
                                 className="px-3 py-1 bg-primary-500 text-white text-sm rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-primary-600 transition-all duration-200"
                             >
-                                {loading ? 'Loading...' : 'Load'}
+                                {loading ? t("loading") : t("load")}
                             </button>
                         </form>
                     )}
@@ -93,7 +95,7 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
                             onChange={() => handleSourceTypeChange('file')}
                             className="text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="text-sm font-medium text-gray-700">Upload HIF File</span>
+                        <span className="text-sm font-medium text-gray-700">{t("uploadHif")}</span>
                     </label>
 
                     {sourceType === 'file' && (

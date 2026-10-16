@@ -5,8 +5,10 @@ import { processGraphData } from '../dataProcessor.js';
 import Sidebar from './Sidebar.jsx';
 import GraphContainer from './GraphContainer.jsx';
 import DetailsPanel from './DetailsPanel.jsx';
+import { LANGUAGES, useI18n } from '../i18n.jsx';
 
 export default function HypergraphViewer() {
+    const { lang, setLang, t } = useI18n();
     const searchTimeoutRef = useRef(null);
 
     const [databaseInfo, setDatabaseInfo] = useState({
@@ -151,7 +153,8 @@ export default function HypergraphViewer() {
                     }
                 })
                 .catch((err) => {
-                    setError("Failed to load graph data");
+                    // 存翻译键，显示时翻译
+                    setError("loadFailed");
                     console.error(err);
                 })
                 .finally(() => {
@@ -187,7 +190,7 @@ export default function HypergraphViewer() {
                 );
 
                 setHoverHyperedge({
-                    keywords: hyperWithMax.keywords || "",
+                    ...hyperWithMax,
                     description:
                         hyperWithMax.description || hyperWithMax.summary || "",
                     members: hyperWithMax.members || [],
@@ -222,13 +225,13 @@ export default function HypergraphViewer() {
                 <div className="bg-white/95 p-4 border-b border-gray-200/50 flex justify-between items-center shadow-sm">
                     <div className="flex items-center gap-4">
                         <h3 className="text-xl font-semibold text-gray-800 m-0">
-                            {visualizationMode === "hyper" ? "Hypergraph" : "Graph"}{" "}
-                            Visualization {selectedVertex && `- ${selectedVertex}`}
+                            {t(visualizationMode === "hyper" ? "titleHyper" : "titleGraph")}{" "}
+                            {selectedVertex && `- ${selectedVertex}`}
                         </h3>
 
                         {/* Visualization Mode Selector */}
                         <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">Mode:</span>
+                            <span className="text-sm text-gray-600">{t("modeLabel")}</span>
                             <div className="flex space-x-1">
                                 {["hyper", "graph"].map((mode) => (
                                     <button
@@ -239,25 +242,45 @@ export default function HypergraphViewer() {
                                             : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                                             }`}
                                     >
-                                        {mode === "hyper" ? "Hypergraph" : "Graph"}
+                                        {t(mode === "hyper" ? "modeHyper" : "modeGraph")}
                                     </button>
                                 ))}
                             </div>
                         </div>
                     </div>
 
+                    <div className="flex items-center gap-3">
                     {graphData && (
                         <div className="bg-white px-4 py-2 text-sm text-gray-600 rounded-lg shadow-sm border border-gray-200">
-                            <span className="font-semibold">Vertices:</span>{" "}
+                            <span className="font-semibold">{t("verticesLabel")}</span>{" "}
                             {Object.keys(graphData.vertices).length} |
                             <span className="font-semibold ml-1">
-                                {visualizationMode === "hyper" ? "Hyperedges:" : "Edges:"}
+                                {t(visualizationMode === "hyper" ? "hyperedgesLabel" : "edgesLabel")}
                             </span>{" "}
                             {visualizationMode === "hyper"
                                 ? Object.keys(graphData.edges).length
                                 : graphDataFormatted?.data?.edges?.length || 0}
                         </div>
                     )}
+                        <div
+                            className="flex rounded-lg border border-gray-200 overflow-hidden text-xs"
+                            role="group"
+                            aria-label="Language"
+                        >
+                            {LANGUAGES.map(([code, name]) => (
+                                <button
+                                    key={code}
+                                    onClick={() => setLang(code)}
+                                    className={`px-2.5 py-1 ${lang === code
+                                        ? "bg-primary-500 text-white"
+                                        : "bg-white text-gray-600 hover:bg-gray-50"
+                                        }`}
+                                >
+                                    {name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
                 <div className="flex-1 relative bg-white">
@@ -265,7 +288,7 @@ export default function HypergraphViewer() {
                         <div className="bg-red-50 text-red-700 p-4 m-4 rounded-lg border-l-4 border-red-500 shadow-sm">
                             <div className="flex items-center">
                                 <span className="text-xl mr-2">⚠️</span>
-                                <span className="font-medium">{error}</span>
+                                <span className="font-medium">{t(error)}</span>
                             </div>
                         </div>
                     )}
@@ -275,10 +298,10 @@ export default function HypergraphViewer() {
                             <div className="text-center">
                                 <div className="text-2xl mb-4">🔄</div>
                                 <div className="font-semibold">
-                                    Loading hypergraph data...
+                                    {t("loadingGraph")}
                                 </div>
                                 <div className="text-sm mt-2 text-gray-500">
-                                    This may take a few seconds
+                                    {t("loadingHint")}
                                 </div>
                             </div>
                         </div>

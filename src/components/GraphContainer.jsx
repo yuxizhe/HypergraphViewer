@@ -1,4 +1,34 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import HoverTip from './HoverTip.jsx';
+import { HYPEREDGE_FIELD_LIMIT, HYPEREDGE_PRIORITY, HYPEREDGE_TIP_EXCLUDED } from '../constants.js';
+
+// 悬停目标 → 悬停卡片内容：顶点 → 顶点属性；连线（2 个顶点的超边）/ 超边轮廓 → 超边属性
+const tipOf = (e, data) => {
+    if (e.targetType === "node") {
+        const node = data?.data.nodes.find((n) => n.id === e.target.id);
+        return node && { title: "node", item: node };
+    }
+    // 只有 2 个成员的超边显示为“边”
+    const hyperedge = (item) => ({
+        title: item.members.length === 2 ? "edge" : "hyperedge",
+        item,
+        priority: HYPEREDGE_PRIORITY,
+        // 没有 type 的超边（如 Hyper-RAG 原版抽取的图）仍显示 keywords
+        exclude: item.type ? HYPEREDGE_TIP_EXCLUDED : [],
+        limit: HYPEREDGE_FIELD_LIMIT,
+    });
+    if (e.targetType === "edge") {
+        const edge = data?.data.edges.find((d) => d.id === e.target.id);
+        if (!edge) return null;
+        const { source, target, ...rest } = edge;
+        return hyperedge({ ...rest, members: [source, target] });
+    }
+    if (e.targetType === "bubble-sets") {
+        const { edge = {}, members } = e.target.options || {};
+        return hyperedge({ ...edge, members: Array.isArray(members) ? members : [] });
+    }
+    return null;
+};
 
 const GraphContainer = ({
     graphDataFormatted,
@@ -8,6 +38,7 @@ const GraphContainer = ({
 }) => {
     const containerRef = useRef(null);
     const graphRef = useRef(null);
+    const [tip, setTip] = useState(null);
 
     // Initialize graph
     useEffect(() => {
@@ -70,6 +101,10 @@ const GraphContainer = ({
                     return prev;
                 });
             }
+
+            // 侧边栏保留最后悬停的超边 / 顶点；悬停卡片只在指针位于元素上时显示
+            const next = e.client ? tipOf(e, graphDataFormatted) : null;
+            setTip(next ? { ...next, x: e.client.x, y: e.client.y } : null);
         });
 
         // Add window resize listener
@@ -93,14 +128,29 @@ const GraphContainer = ({
                 containerRef.current.innerHTML = "";
             }
             setHoverHyperedge(null);
+            setTip(null);
         };
     }, [graphDataFormatted, visualizationMode, setHoverHyperedge, setHoverNode]);
 
     return (
-        <div
-            ref={containerRef}
-            className="w-full rounded-xl h-full"
-        />
+        <>
+            <div
+                ref={containerRef}
+                className="w-full rounded-xl h-full"
+                onMouseLeave={() => setTip(null)}
+            />
+            {tip && (
+                <HoverTip
+                    title={tip.title}
+                    item={tip.item}
+                    priority={tip.priority}
+                    exclude={tip.exclude}
+                    limit={tip.limit}
+                    x={tip.x}
+                    y={tip.y}
+                />
+            )}
+        </>
     );
 };
 

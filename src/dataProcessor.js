@@ -1,4 +1,4 @@
-import { COLORS, LAYOUT_THRESHOLD, EDGE_SEPARATOR, EXCLUDED_KEYS } from './constants.js';
+import { COLORS, LAYOUT_THRESHOLD, EDGE_SEPARATOR } from './constants.js';
 import { createBubbleStyle, getNodeColor } from './utils.js';
 
 // Convert data to G6 Graph format
@@ -109,31 +109,11 @@ export const processGraphData = (graphData, selectedVertex, visualizationMode, e
         });
     }
 
-    // Add tooltip plugin
-    plugins.push({
-        type: "tooltip",
-        getContent: (e, items) => {
-            return items
-                .map((item) => {
-                    let result = `<h3><strong>${item.entity_name || item.id
-                        }</strong></h3>`;
-                    // Display all remaining properties
-                    Object.entries(item).forEach(([key, value]) => {
-                        if (!EXCLUDED_KEYS.has(key)) {
-                            result += `<p><strong>${key}:</strong> ${value}</p>`;
-                        }
-                    });
-                    return result;
-                })
-                .join("");
-        },
-    });
-
     const isGraph = visualizationMode === "graph";
 
     return {
         data: hyperData,
-        plugins: isGraph ? [plugins[plugins.length - 1]] : plugins,
+        plugins: isGraph ? [] : plugins,
         node: {
             palette: { field: "cluster" },
             style: {
