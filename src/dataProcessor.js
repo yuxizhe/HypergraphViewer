@@ -120,6 +120,15 @@ export const processGraphData = (graphData, selectedVertex, visualizationMode, e
                 size: hyperData.nodes.length > LAYOUT_THRESHOLD ? 15 : 20,
                 labelText: (d) => d.id,
                 fill: (d) => getNodeColor(d, selectedVertex, entityTypeColors),
+                // 显式写出被状态覆盖的样式：G6 移除状态时只回到这里的值，不写就会保留状态样式
+                opacity: 1,
+                lineWidth: 0,
+                labelFontWeight: "normal",
+            },
+            // 点击超边高亮：成员实体 highlight，其余 inactive（GraphContainer 设置）
+            state: {
+                highlight: { stroke: "#6d28d9", lineWidth: 3, labelFontWeight: "bold" },
+                inactive: { opacity: 0.15 },
             },
         },
         edge: {
@@ -127,6 +136,11 @@ export const processGraphData = (graphData, selectedVertex, visualizationMode, e
                 size: isGraph ? 3 : 2,
                 stroke: "#a68fff",
                 lineWidth: 1,
+                opacity: 1,
+            },
+            state: {
+                highlight: { stroke: "#6d28d9", lineWidth: 3 },
+                inactive: { opacity: 0.1 },
             },
         },
         layout: {

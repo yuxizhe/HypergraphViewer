@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import HoverTip from './HoverTip.jsx';
 import { HYPEREDGE_FIELD_LIMIT, HYPEREDGE_PRIORITY, HYPEREDGE_TIP_EXCLUDED } from '../constants.js';
+import { BUBBLE_DIMMED, BUBBLE_HIGHLIGHT, BUBBLE_NORMAL } from '../utils.js';
 
 // 悬停目标 → 悬停卡片内容：顶点 → 顶点属性；连线（2 个顶点的超边）/ 超边轮廓 → 超边属性
 const tipOf = (e, data) => {
@@ -30,6 +31,42 @@ const tipOf = (e, data) => {
     return null;
 };
 
+// 点击选中的超边（轮廓或连线）→ { key, members, item }；null 表示未选中
+const selectionOf = (e, data) => {
+    if (e.targetType === "bubble-sets") {
+        const { key, edge = {}, members } = e.target.options || {};
+        const list = Array.isArray(members) ? members : [];
+        return { key, members: list, item: { ...edge, members: list } };
+    }
+    if (e.targetType === "edge") {
+        const edge = data?.data.edges.find((d) => d.id === e.target.id);
+        if (!edge) return null;
+        const { source, target, ...rest } = edge;
+        return { key: edge.id, members: [source, target], item: { ...rest, members: [source, target] } };
+    }
+    return null;
+};
+
+// 高亮选中的超边及其成员实体，其余实体、连线、超边轮廓变淡；selection 为 null 时全部恢复
+const applySelection = (graph, data, selection) => {
+    const members = new Set(selection?.members || []);
+    const states = {};
+    data.data.nodes.forEach((n) => {
+        states[n.id] = !selection ? [] : members.has(n.id) ? ["highlight"] : ["inactive"];
+    });
+    data.data.edges.forEach((d) => {
+        states[d.id] = !selection ? [] : d.id === selection.key ? ["highlight"] : ["inactive"];
+    });
+    graph.setElementState(states, false);
+    graph.setPlugins((plugins) =>
+        plugins.map((p) =>
+            p.type !== "bubble-sets"
+                ? p
+                : { ...p, ...(!selection ? BUBBLE_NORMAL : p.key === selection.key ? BUBBLE_HIGHLIGHT : BUBBLE_DIMMED) }
+        )
+    );
+};
+
 const GraphContainer = ({
     graphDataFormatted,
     visualizationMode,
@@ -39,6 +76,8 @@ const GraphContainer = ({
     const containerRef = useRef(null);
     const graphRef = useRef(null);
     const [tip, setTip] = useState(null);
+    // 选中期间侧边栏固定显示该超边，不随悬停变化
+    const selectedRef = useRef(null);
 
     // Initialize graph
     useEffect(() => {
@@ -69,8 +108,18 @@ const GraphContainer = ({
         graphRef.current = graph;
         graphRef.current.render();
 
+        // 点击超边：选中并高亮；再点同一条或点空白处取消
+        graph.on("click", (e) => {
+            if (e.targetType === "node") return;
+            const next = selectionOf(e, graphDataFormatted);
+            const selection = next && next.key !== selectedRef.current?.key ? next : null;
+            selectedRef.current = selection;
+            applySelection(graph, graphDataFormatted, selection);
+            if (selection) setHoverHyperedge(selection.item);
+        });
+
         graph.on("pointermove", (e) => {
-            if (e.targetType === "bubble-sets") {
+            if (e.targetType === "bubble-sets" && !selectedRef.current) {
                 const target = e.target.options;
                 const newHyperedge = {
                     ...target.edge,
@@ -129,6 +178,7 @@ const GraphContainer = ({
             }
             setHoverHyperedge(null);
             setTip(null);
+            selectedRef.current = null;
         };
     }, [graphDataFormatted, visualizationMode, setHoverHyperedge, setHoverNode]);
 
