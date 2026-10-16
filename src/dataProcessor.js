@@ -1,6 +1,7 @@
 import { COLORS, LAYOUT_THRESHOLD, EDGE_SEPARATOR } from './constants.js';
 import { createBubbleStyle, getNodeColor } from './utils.js';
 import { HOVER_BUBBLE_SETS } from './hoverBubbleSets.js';
+import { HYPERGRAPH_LAYOUT } from './layouts/index.js';
 
 // Convert data to G6 Graph format
 export const processGraphData = (graphData, selectedVertex, visualizationMode, entityTypeColors) => {
@@ -74,6 +75,8 @@ export const processGraphData = (graphData, selectedVertex, visualizationMode, e
                 key: `bubble-sets-${key}`,
                 type: HOVER_BUBBLE_SETS,
                 members: nodes,
+                // 只圈节点，不包裹标签
+                memberBoundsType: "key",
                 weight: edge.weight || nodes.length,
                 description: edge.description || edge.summary || "",
                 edge: edge,
@@ -144,15 +147,24 @@ export const processGraphData = (graphData, selectedVertex, visualizationMode, e
                 inactive: { opacity: 0.1 },
             },
         },
-        layout: {
-            type:
-                hyperData.nodes.length > LAYOUT_THRESHOLD ? "force" : "force",
-            clustering: !isGraph,
-            preventOverlap: true,
-            nodeClusterBy: isGraph ? undefined : "cluster",
-            gravity: 50,
-            linkDistance: 50,
-        },
+        layout: isGraph
+            ? {
+                type: "force",
+                preventOverlap: true,
+                gravity: 50,
+                linkDistance: 50,
+            }
+            : {
+                // 超图布局：同一超边的实体挨在一起；2 元超边（普通边）也参与。以选中实体为中心呈花瓣状排布
+                type: HYPERGRAPH_LAYOUT,
+                hyperedges: hyperData.hyperEdges,
+                centerNode: hyperData.nodes.some((n) => n.id === selectedVertex) ? selectedVertex : undefined,
+                nodeSpacing: 50,
+                // 标签互不重叠：与节点样式的 labelText、默认字号 12 保持一致
+                preventLabelOverlap: true,
+                labelText: (d) => d.id,
+                labelFontSize: 12,
+            },
         autoFit: "center",
     };
 };

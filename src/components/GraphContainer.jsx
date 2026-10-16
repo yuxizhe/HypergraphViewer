@@ -104,7 +104,7 @@ const GraphContainer = ({
             data: graphDataFormatted.data,
             behaviors: ["zoom-canvas", "drag-canvas", "drag-element"],
             autoFit: "center",
-            animate: false,
+            animation: false,
             node: graphDataFormatted.node,
             edge: graphDataFormatted.edge,
             layout: graphDataFormatted.layout,

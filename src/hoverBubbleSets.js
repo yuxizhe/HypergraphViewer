@@ -9,7 +9,9 @@
  *   npm 版基类的 update 只合并配置、不重画。
  * 以新类型名注册，不覆盖 G6 内置的 'bubble-sets'。
  */
-import { BubbleSets, CommonEvent, ExtensionCategory, GraphEvent, register } from '@antv/g6';
+import { CommonEvent, ExtensionCategory, GraphEvent, register } from '@antv/g6';
+// 基类换成支持 memberBoundsType: 'key' 的版本（只圈节点、不包裹标签）
+import { KeyBoundsBubbleSets as BubbleSets } from './layouts/bubbleSetsKey.js';
 
 export const HOVER_BUBBLE_SETS = 'hover-bubble-sets';
 export const BUBBLE_SETS_TARGET = 'bubble-sets';
