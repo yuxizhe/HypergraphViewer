@@ -1,5 +1,6 @@
 import { COLORS, LAYOUT_THRESHOLD, EDGE_SEPARATOR } from './constants.js';
 import { createBubbleStyle, getNodeColor } from './utils.js';
+import { HOVER_BUBBLE_SETS } from './hoverBubbleSets.js';
 
 // Convert data to G6 Graph format
 export const processGraphData = (graphData, selectedVertex, visualizationMode, entityTypeColors) => {
@@ -71,7 +72,7 @@ export const processGraphData = (graphData, selectedVertex, visualizationMode, e
 
             plugins.push({
                 key: `bubble-sets-${key}`,
-                type: "bubble-sets",
+                type: HOVER_BUBBLE_SETS,
                 members: nodes,
                 weight: edge.weight || nodes.length,
                 description: edge.description || edge.summary || "",

@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Graph } from '@antv/g6';
+import { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS } from '../hoverBubbleSets.js';
 import HoverTip from './HoverTip.jsx';
 import { HYPEREDGE_FIELD_LIMIT, HYPEREDGE_PRIORITY, HYPEREDGE_TIP_EXCLUDED } from '../constants.js';
 import { BUBBLE_DIMMED, BUBBLE_HIGHLIGHT, BUBBLE_NORMAL } from '../utils.js';
@@ -24,7 +26,7 @@ const tipOf = (e, data) => {
         const { source, target, ...rest } = edge;
         return hyperedge({ ...rest, members: [source, target] });
     }
-    if (e.targetType === "bubble-sets") {
+    if (e.targetType === BUBBLE_SETS_TARGET) {
         const { edge = {}, members } = e.target.options || {};
         return hyperedge({ ...edge, members: Array.isArray(members) ? members : [] });
     }
@@ -33,7 +35,7 @@ const tipOf = (e, data) => {
 
 // 点击选中的超边（轮廓或连线）→ { key, members, item }；null 表示未选中
 const selectionOf = (e, data) => {
-    if (e.targetType === "bubble-sets") {
+    if (e.targetType === BUBBLE_SETS_TARGET) {
         const { key, edge = {}, members } = e.target.options || {};
         const list = Array.isArray(members) ? members : [];
         return { key, members: list, item: { ...edge, members: list } };
@@ -60,11 +62,23 @@ const applySelection = (graph, data, selection) => {
     graph.setElementState(states, false);
     graph.setPlugins((plugins) =>
         plugins.map((p) =>
-            p.type !== "bubble-sets"
+            p.type !== HOVER_BUBBLE_SETS
                 ? p
                 : { ...p, ...(!selection ? BUBBLE_NORMAL : p.key === selection.key ? BUBBLE_HIGHLIGHT : BUBBLE_DIMMED) }
         )
     );
+};
+
+// 首次渲染完成前销毁（换数据、StrictMode 二次挂载）时，npm 版 G6 在销毁元素层时抛异常；
+// 此时插件、交互、布局已销毁，补上画布销毁即可
+const destroyGraph = (graph) => {
+    if (graph.destroyed) return;
+    try {
+        graph.destroy();
+    } catch {
+        graph.context.canvas?.destroy();
+        graph.destroyed = true;
+    }
 };
 
 const GraphContainer = ({
@@ -81,17 +95,9 @@ const GraphContainer = ({
 
     // Initialize graph
     useEffect(() => {
-        if (!graphDataFormatted || !containerRef.current || !window.G6) return;
+        if (!graphDataFormatted || !containerRef.current) return;
 
-        // Destroy previous graph instance and clear canvas
-        if (graphRef.current && !graphRef.current.destroyed) {
-            graphRef.current.clear();
-            if (containerRef.current) {
-                containerRef.current.innerHTML = "";
-            }
-        }
-
-        const graph = new window.G6.Graph({
+        const graph = new Graph({
             container: containerRef.current,
             width: containerRef.current.offsetWidth,
             height: containerRef.current.offsetHeight || 800,
@@ -106,7 +112,8 @@ const GraphContainer = ({
         });
 
         graphRef.current = graph;
-        graphRef.current.render();
+        // 实例在布局迭代中被销毁（换数据、卸载）时 render 会 reject
+        graph.render().catch(() => {});
 
         // 点击超边：选中并高亮；再点同一条或点空白处取消
         graph.on("click", (e) => {
@@ -119,7 +126,7 @@ const GraphContainer = ({
         });
 
         graph.on("pointermove", (e) => {
-            if (e.targetType === "bubble-sets" && !selectedRef.current) {
+            if (e.targetType === BUBBLE_SETS_TARGET && !selectedRef.current) {
                 const target = e.target.options;
                 const newHyperedge = {
                     ...target.edge,
@@ -158,7 +165,7 @@ const GraphContainer = ({
 
         // Add window resize listener
         const handleResize = () => {
-            if (graphRef.current && containerRef.current) {
+            if (graphRef.current && !graphRef.current.destroyed && containerRef.current) {
                 graphRef.current.setSize(
                     containerRef.current.offsetWidth,
                     containerRef.current.offsetHeight
@@ -170,12 +177,9 @@ const GraphContainer = ({
 
         return () => {
             window.removeEventListener("resize", handleResize);
-            if (graphRef.current && !graphRef.current.destroyed) {
-                graphRef.current.clear();
-            }
-            if (containerRef.current) {
-                containerRef.current.innerHTML = "";
-            }
+            // 销毁而不是 clear：npm 版 G6 clear 后力导布局仍在迭代，会更新已不存在的节点而报错
+            graphRef.current = null;
+            destroyGraph(graph);
             setHoverHyperedge(null);
             setTip(null);
             selectedRef.current = null;
