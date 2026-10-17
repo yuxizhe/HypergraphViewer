@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { generateEntityTypeColors } from '../constants.js';
 import { fetchDatabaseInfo, fetchVertices, fetchGraphData, dataSourceManager } from '../api.js';
-import { processGraphData } from '../dataProcessor.js';
+import { fromKeyedEdges, pairId, typeColorsOf } from 'hypergraph-viz';
 import Sidebar from './Sidebar.jsx';
 import GraphContainer from './GraphContainer.jsx';
 import DetailsPanel from './DetailsPanel.jsx';
@@ -39,7 +38,7 @@ export default function HypergraphViewer() {
 
     // Generate entity type color mapping
     const entityTypeColors = useMemo(() => {
-        return generateEntityTypeColors(vertices);
+        return typeColorsOf(vertices);
     }, [vertices]);
 
     // Handle data source change
@@ -163,16 +162,21 @@ export default function HypergraphViewer() {
         }
     }, [selectedVertex]);
 
-    // Convert data to G6 Graph format
-    const graphDataFormatted = useMemo(() => {
-        return processGraphData(graphData, selectedVertex, visualizationMode, entityTypeColors);
-    }, [graphData, selectedVertex, visualizationMode, entityTypeColors]);
+    // 超边 key 为用 |#| 拼接的成员，转为 hypergraph-viz 的输入格式
+    const hypergraph = useMemo(() => graphData && fromKeyedEdges(graphData), [graphData]);
+
+    // 图模式只画 2 个顶点的超边，按顶点对去重后的连线数
+    const lineCount = useMemo(() => {
+        if (!hypergraph) return 0;
+        const pairs = hypergraph.hyperedges.filter((he) => new Set(he.members).size === 2);
+        return new Set(pairs.map((he) => pairId(...new Set(he.members)))).size;
+    }, [hypergraph]);
 
     // Select the "largest" node and hyperedges by default
     useEffect(() => {
-        if (!graphDataFormatted) return;
+        if (!hypergraph) return;
 
-        const nodes = graphDataFormatted.data.nodes;
+        const nodes = Object.entries(hypergraph.vertices).map(([id, v]) => ({ ...v, id, label: id }));
         if (!hoverNode && nodes.length > 0) {
             const nodeWithMax = nodes.reduce((best, cur) =>
                 (cur.degree || 0) > (best.degree || 0) ? cur : best
@@ -181,7 +185,7 @@ export default function HypergraphViewer() {
         }
 
         if (visualizationMode === "hyper") {
-            const hyperEdges = graphDataFormatted.data.hyperEdges;
+            const hyperEdges = hypergraph.hyperedges.filter((he) => new Set(he.members).size > 2);
             if (!hoverHyperedge && hyperEdges.length > 0) {
                 const getWeight = (edge) =>
                     edge.weight || edge.members?.length || 0;
@@ -198,7 +202,7 @@ export default function HypergraphViewer() {
                 });
             }
         }
-    }, [graphDataFormatted, visualizationMode, hoverNode, hoverHyperedge]);
+    }, [hypergraph, visualizationMode, hoverNode, hoverHyperedge]);
 
     return (
         <div className="flex h-screen bg-linear-to-br from-gray-50 to-gray-100">
@@ -259,7 +263,7 @@ export default function HypergraphViewer() {
                             </span>{" "}
                             {visualizationMode === "hyper"
                                 ? Object.keys(graphData.edges).length
-                                : graphDataFormatted?.data?.edges?.length || 0}
+                                : lineCount}
                         </div>
                     )}
                         <div
@@ -309,8 +313,10 @@ export default function HypergraphViewer() {
 
                     <div className="flex h-[calc(100vh-71px)]">
                         <GraphContainer
-                            graphDataFormatted={graphDataFormatted}
+                            hypergraph={hypergraph}
                             visualizationMode={visualizationMode}
+                            selectedVertex={selectedVertex}
+                            entityTypeColors={entityTypeColors}
                             setHoverHyperedge={setHoverHyperedge}
                             setHoverNode={setHoverNode}
                         />
