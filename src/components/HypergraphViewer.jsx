@@ -11,7 +11,8 @@ import { LANGUAGES, useI18n } from '../i18n.jsx';
 import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from '../viewSettings.js';
 import { DATASETS, initialDataset, rememberDataset } from '../datasets.js';
 
-const EMPTY_HIDDEN = { nodes: [], hyperedges: [] };
+// faded：隐藏的实体中“淡出”的部分（不参与布局，悬停、选中相关元素时在画布上显示与它们的关联），其余彻底隐藏
+const EMPTY_HIDDEN = { nodes: [], hyperedges: [], faded: [] };
 
 // 在 map 中设置 / 删除（value 为 null）一项，返回新对象
 const put = (map, key, value) => {
@@ -59,7 +60,9 @@ export default function HypergraphViewer() {
 
     // 子图统计、选择与隐藏、渲染设置与颜色（右侧面板）
     const [selection, setSelection] = useState(EMPTY_SELECTION);
-    const [hidden, setHidden] = useState(EMPTY_HIDDEN);
+    // 手动调整过的隐藏；hiddenGraph 为它所属的子图（换子图后、同步前用自动隐藏的结果，见下方 hidden）
+    const [hiddenState, setHidden] = useState(EMPTY_HIDDEN);
+    const [hiddenGraph, setHiddenGraph] = useState(null);
     const [focusId, setFocusId] = useState(null);
     const [renderSettings, setRenderSettings] = useStoredState("hypergraph-viewer-render", DEFAULT_RENDER_SETTINGS);
     const [colorOverrides, setColorOverrides] = useStoredState("hypergraph-viewer-colors", EMPTY_COLOR_OVERRIDES);
@@ -175,6 +178,8 @@ export default function HypergraphViewer() {
     };
 
     // Load graph data
+    // 也随 dataVersion 重新读取：换数据源时先清空再选回同一个中心，React 合并更新后 selectedVertex 不变，
+    // 只看 selectedVertex 时画布会一直是空的（StrictMode 下首次加载执行两遍，刷新时常出现）
     useEffect(() => {
         if (selectedVertex) {
             setLoading(true);
@@ -197,7 +202,7 @@ export default function HypergraphViewer() {
                     setLoading(false);
                 });
         }
-    }, [selectedVertex]);
+    }, [selectedVertex, dataVersion]);
 
     // 换数据源后重新读取全库概览
     useEffect(() => {
@@ -238,13 +243,50 @@ export default function HypergraphViewer() {
     // 超边 key 为用 |#| 拼接的成员，转为 hypergraph-viz 的输入格式
     const hypergraph = useMemo(() => graphData && fromKeyedEdges(graphData), [graphData]);
 
-    // 换子图时清空选择与隐藏（从左侧超边列表跳转来的选中该超边）
+    // 打开子图时自动隐藏的实体：子图内度数（所在超边数，同右侧实体表的“度数”）超过阈值的，中心也不例外；
+    // 以及示例数据集指定默认隐藏的类型（如金融数据的“财季”）
+    const autoHidden = (graph, threshold) => {
+        if (!graph) return EMPTY_HIDDEN;
+        const { degree } = hypergraphStats(graph);
+        const types = new Set(
+            currentDataSource.type === "static" ? DATASETS.find((d) => d.id === currentDataSource.dataset)?.hiddenTypes : []
+        );
+        // 度数超过阈值的淡出，指定类型的彻底隐藏
+        const faded = Object.keys(graph.vertices).filter((id) => threshold && (degree.get(id) || 0) > threshold);
+        const typed = Object.keys(graph.vertices).filter(
+            (id) => !faded.includes(id) && types.has(graph.vertices[id]?.entity_type)
+        );
+        return faded.length || typed.length ? { nodes: [...faded, ...typed], hyperedges: [], faded } : EMPTY_HIDDEN;
+    };
+
+    // 当前子图自动隐藏的实体（改阈值由下方的 effect 处理）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const autoHiddenOfGraph = useMemo(() => autoHidden(hypergraph, renderSettings.autoHideDegree), [hypergraph]);
+    // 换子图后的第一次渲染就用自动隐藏的结果：否则视图先按完整子图布局一次，紧接着又按隐藏后的重新布局，
+    // 前一次没算完的布局会去更新已删除的节点（G6 报 Node not found / Unknown element type）
+    const hidden = hiddenGraph === hypergraph ? hiddenState : autoHiddenOfGraph;
+
+    // 换子图时清空选择，隐藏重置为自动隐藏的实体（从左侧超边列表跳转来的选中该超边）
     useEffect(() => {
         setSelection(pendingSelectionRef.current ?? EMPTY_SELECTION);
         pendingSelectionRef.current = null;
-        setHidden(EMPTY_HIDDEN);
+        setHidden(autoHiddenOfGraph);
+        setHiddenGraph(hypergraph);
         setFocusId(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hypergraph]);
+
+    // 改了阈值：按新阈值重新隐藏当前子图的实体（手动隐藏的超边保留）
+    const autoHideLoadedRef = useRef(false);
+    useEffect(() => {
+        if (!autoHideLoadedRef.current) {
+            autoHideLoadedRef.current = true;
+            return;
+        }
+        const { nodes, faded } = autoHidden(hypergraph, renderSettings.autoHideDegree);
+        setHidden((h) => ({ ...h, nodes, faded }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [renderSettings.autoHideDegree]);
 
     // 被隐藏的元素移出选择
     useEffect(() => {
@@ -261,6 +303,22 @@ export default function HypergraphViewer() {
     const visibleHypergraph = useMemo(
         () => hypergraph && filterHypergraph(hypergraph, hidden),
         [hypergraph, hidden]
+    );
+    // 画布的数据：淡出的实体留在数据里，由视图按 fadedNodes 处理
+    const fadedNodes = useMemo(
+        () => (hidden.faded || []).filter((id) => hidden.nodes.includes(id)),
+        [hidden]
+    );
+    const viewData = useMemo(
+        () =>
+            hypergraph &&
+            (fadedNodes.length
+                ? filterHypergraph(hypergraph, {
+                      nodes: hidden.nodes.filter((id) => !fadedNodes.includes(id)),
+                      hyperedges: hidden.hyperedges,
+                  })
+                : visibleHypergraph),
+        [hypergraph, hidden, fadedNodes, visibleHypergraph]
     );
     const visibleStats = useMemo(
         () => visibleHypergraph && hypergraphStats(visibleHypergraph),
@@ -336,20 +394,22 @@ export default function HypergraphViewer() {
         () => ({
             type: renderSettings.layout,
             nodeSpacing: renderSettings.nodeSpacing,
-            preventLabelOverlap: renderSettings.preventLabelOverlap,
+            preventLabelOverlap: renderSettings.labelOverlap === "layout",
             useCenter: renderSettings.useCenter,
         }),
-        [renderSettings.layout, renderSettings.nodeSpacing, renderSettings.preventLabelOverlap, renderSettings.useCenter]
+        [renderSettings.layout, renderSettings.nodeSpacing, renderSettings.labelOverlap, renderSettings.useCenter]
     );
-    // 标签：全部 / 仅中心与枢纽 / 不显示
+    // 标签：全部 / 仅中心与枢纽 / 不显示；超过最大长度的截断（布局按截断后的宽度防重叠，悬停卡片仍显示全名）
     const labelText = useMemo(() => {
         if (renderSettings.labelMode === "none") return () => "";
+        const max = renderSettings.labelMaxLength;
+        const cut = (s) => (max && s.length > max ? `${s.slice(0, max - 1)}…` : s);
         if (renderSettings.labelMode === "key") {
             const keep = new Set(stats?.hubs);
-            return (d) => (d.id === selectedVertex || keep.has(d.id) ? String(d.id) : "");
+            return (d) => (d.id === selectedVertex || keep.has(d.id) ? cut(String(d.id)) : "");
         }
-        return undefined;
-    }, [renderSettings.labelMode, stats, selectedVertex]);
+        return max ? (d) => cut(String(d.id)) : undefined;
+    }, [renderSettings.labelMode, renderSettings.labelMaxLength, stats, selectedVertex]);
 
     const viewOptions = {
         mode: visualizationMode,
@@ -361,6 +421,9 @@ export default function HypergraphViewer() {
         contours: renderSettings.contours,
         contourBounds: renderSettings.contourBounds,
         nodeSizeBy: renderSettings.nodeSizeBy,
+        labelBy: renderSettings.labelBy,
+        hideOverlappingLabels: renderSettings.labelOverlap === "hide",
+        fadedNodes,
         layout,
         labelText,
         theme,
@@ -415,10 +478,10 @@ export default function HypergraphViewer() {
             return String(he?.description || he?.summary || stats?.members.get(id)?.join("、") || id);
         };
         return [
-            ...hidden.nodes.map((id) => ({ kind: "nodes", id, label: id })),
+            ...hidden.nodes.map((id) => ({ kind: "nodes", id, label: id, faded: fadedNodes.includes(id) })),
             ...hidden.hyperedges.map((id) => ({ kind: "hyperedges", id, label: label(id) })),
         ];
-    }, [hidden, hypergraph, stats]);
+    }, [hidden, hypergraph, stats, fadedNodes]);
 
     // 图模式只画 2 个顶点的超边，按顶点对去重后的连线数
     const lineCount = useMemo(() => {
@@ -585,7 +648,7 @@ export default function HypergraphViewer() {
                     <div className="flex h-[calc(100vh-71px)]">
                         <GraphContainer
                             hypergraph={hypergraph}
-                            data={visibleHypergraph}
+                            data={viewData}
                             viewRef={viewRef}
                             viewOptions={viewOptions}
                             selection={selection}
@@ -593,7 +656,11 @@ export default function HypergraphViewer() {
                             pinned={!isEmptySelection(selection)}
                             hiddenChips={hiddenChips}
                             onRestore={(kind, id) =>
-                                setHidden((h) => ({ ...h, [kind]: h[kind].filter((x) => x !== id) }))
+                                setHidden((h) => ({
+                                    ...h,
+                                    [kind]: h[kind].filter((x) => x !== id),
+                                    faded: (h.faded || []).filter((x) => x !== id),
+                                }))
                             }
                             onRestoreAll={() => setHidden(EMPTY_HIDDEN)}
                             setHoverHyperedge={setHoverHyperedge}

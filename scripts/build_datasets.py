@@ -1,16 +1,15 @@
 """生成 public/datasets/ 下的示例数据集（HIF 格式），供“示例数据”下拉框切换。
 
 数据来源：
-- neurology：原先内置在 src/data.js 中的神经学子图（Hyper-RAG 抽取，100 个中心实体的子图并集）
+- neurology：Hypergraph-DB tests/db 下的神经学库（Hyper-RAG 抽取，2.5 万实体），取度数最高的 100 个实体
+  （另加默认中心 HUNTINGTON CHOREA）各自的邻域超边并集。原先内置的 src/data.js 是另一次抽取，超边没有描述
 - nvda：英伟达超大规模云子图（金融，中文），hyper-master-paper 的 data/hypergraph.hif.json
 - sanguo / xiyou：Hypergraph-DB tests/db 下的《三国演义》《西游记》库（.hgdb，需要 hyperdb 包）
 - got：《权力的游戏》第一季，SimpleHypergraphs.jl 教程数据 hg_season1.json；超边为场景，节点为出场角色
 
 用法（在装有 hyperdb 的环境中运行，如 Hypergraph-DB 的 .venv）:
   python scripts/build_datasets.py \
-      --neurology neurology.json --nvda hypergraph.hif.json \
-      --hgdb-dir ~/Hypergraph-DB/tests/db --got hg_season1.json
-neurology.json 为 data.js 中 datas 对象的 JSON（git show <rev>:src/data.js 去掉 export 前缀即可）。
+      --nvda hypergraph.hif.json --hgdb-dir ~/Hypergraph-DB/tests/db --got hg_season1.json
 未提供的来源跳过，不覆盖已有文件。
 """
 from __future__ import annotations
@@ -47,15 +46,16 @@ def hif(nodes: dict[str, dict], edges: list[tuple[str, list[str], dict]], **meta
     }
 
 
-def neurology(path: Path) -> dict:
-    datas = json.loads(path.read_text())
-    nodes, edges = {}, {}
-    for graph in datas["graphs"].values():
-        for vid, v in graph["vertices"].items():
-            nodes.setdefault(vid, v)
-        for key, e in graph["edges"].items():
-            edges.setdefault(key, e)
-    return hif(nodes, [(key, key.split("|#|"), e) for key, e in edges.items()], name="Neurology")
+def hgdb_ego(path: Path, name: str, top: int, extra_centers=()) -> dict:
+    """度数最高的 top 个实体（及 extra_centers）各自的邻域超边并集；全库太大时用"""
+    from hyperdb import HypergraphDB
+
+    hg = HypergraphDB(str(path))
+    centers = sorted(hg.all_v, key=lambda v: -hg.degree_v(v))[:top]
+    centers += [c for c in extra_centers if hg.has_v(c) and c not in centers]
+    edges = sorted({e for c in centers for e in hg.nbr_e_of_v(c)})
+    nodes = {v: hg.v(v) for v in sorted({v for e in edges for v in e})}
+    return hif(nodes, [("_".join(e), list(e), hg.e(e)) for e in edges], name=name)
 
 
 def nvda(path: Path) -> dict:
@@ -72,8 +72,9 @@ def hgdb(path: Path, name: str) -> dict:
     from hyperdb import HypergraphDB
 
     hg = HypergraphDB(str(path))
-    nodes = {v: hg.v(v) for v in hg.all_v}
-    edges = [("_".join(e), list(e), hg.e(e)) for e in hg.all_e]
+    # 排序：hgdb 的遍历顺序每次不同，固定顺序后重新生成的文件不会无意义地变动
+    nodes = {v: hg.v(v) for v in sorted(hg.all_v)}
+    edges = [("_".join(e), list(e), hg.e(e)) for e in sorted(hg.all_e)]
     return hif(nodes, edges, name=name)
 
 
@@ -111,16 +112,14 @@ def write(name: str, data: dict):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--neurology", type=Path)
     ap.add_argument("--nvda", type=Path)
     ap.add_argument("--hgdb-dir", type=Path)
     ap.add_argument("--got", type=Path)
     args = ap.parse_args()
-    if args.neurology:
-        write("neurology", neurology(args.neurology))
     if args.nvda:
         write("nvda", nvda(args.nvda))
     if args.hgdb_dir:
+        write("neurology", hgdb_ego(args.hgdb_dir / "neurology.hgdb", "Neurology", 100, ["HUNTINGTON CHOREA"]))
         write("sanguo", hgdb(args.hgdb_dir / "sanguo.hgdb", "三国演义"))
         write("xiyou", hgdb(args.hgdb_dir / "xiyou.hgdb", "西游记"))
     if args.got:

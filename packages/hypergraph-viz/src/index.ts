@@ -2,6 +2,8 @@ export { EDGE_SEPARATOR, fromKeyedEdges } from './adapters';
 export type { HypergraphStats } from './analysis';
 export { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats } from './analysis';
 export { KeyBoundsBubbleSets } from './bubble-sets-key';
+export type { LabelCandidate } from './label-culling';
+export { cullLabels } from './label-culling';
 export { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, HoverBubbleSets, SUPPRESS_CONTOUR_UPDATE } from './hover-bubble-sets';
 export type { Hyperedge, HypergraphLayoutOptions } from './layout';
 export { HypergraphLayout } from './layout';

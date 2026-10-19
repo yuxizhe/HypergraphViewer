@@ -1,11 +1,13 @@
 import type { GraphOptions, ID } from '@antv/g6';
-import { Graph } from '@antv/g6';
+import { Graph, GraphEvent } from '@antv/g6';
 import { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, SUPPRESS_CONTOUR_UPDATE } from './hover-bubble-sets';
+import { cullLabels } from './label-culling';
 import { registerHypergraph } from './register';
 import type { Selection } from './selection';
 import { EMPTY_SELECTION, isEmptySelection, nextSelection, selectionStyles } from './selection';
 import type { HyperedgeItem, HypergraphData, HypergraphSpec, SpecOptions } from './spec';
 import { pairId, toG6Spec } from './spec';
+import { placeFaded } from './faded';
 import type { HypergraphTheme } from './theme';
 import { resolveTheme } from './theme';
 
@@ -17,14 +19,35 @@ import { resolveTheme } from './theme';
  * a line's hyperedges are the ids of the hyperedges it comes from
  */
 export type HypergraphHit =
-  | { kind: 'node'; id: ID; item: Record<string, any> }
+  | {
+      kind: 'node';
+      id: ID;
+      item: Record<string, any>;
+      /** 只剩该实体一个成员的超边（其余成员淡出，见 fadedNodes）/ hyperedges whose other members are all faded */
+      fadedHyperedges?: HyperedgeItem[];
+    }
   | { kind: 'edge' | 'hyperedge'; id: ID; members: ID[]; item: HyperedgeItem; hyperedges?: ID[] };
 
 export interface ViewOptions extends SpecOptions {
   data?: HypergraphData;
   /** 容器没有高度时的画布高度 / canvas height when the container has none */
   fallbackHeight?: number;
+  /** 渲染后的视口：'center' 只居中（默认），'view' 缩放到撑满画布 / 'center' (default) centers only, 'view' zooms to fill the canvas */
   autoFit?: GraphOptions['autoFit'];
+  /** autoFit 为 'view' 时自动缩放的上限，避免只有几个节点的图被放得很大，默认 2 / zoom cap when fitting to view */
+  maxFitZoom?: number;
+  /** autoFit 为 'view' 时四周留白（像素），默认 24 / padding around the fitted view */
+  fitPadding?: number;
+  /**
+   * 节点标签保持屏幕上的字号，不随画布缩放；标签避让（hideOverlappingLabels）随之按屏幕尺寸计算，放大后显示更多标签
+   * Keep node labels at their on-screen font size while zooming; label culling then works in screen space, showing more labels when zoomed in
+   */
+  fixLabelSize?: boolean;
+  /**
+   * 指针悬停在实体 / 超边上时高亮，效果同 hover()（表格行悬停）
+   * Highlight the element under the pointer, same as hover() (table row hover)
+   */
+  hoverHighlight?: boolean;
   behaviors?: GraphOptions['behaviors'];
   /** 指针移动时触发，不在元素上时为 null；client 为视口坐标 / fired on pointer move, null off elements */
   onHover?: (hit: (HypergraphHit & { client: { x: number; y: number } }) | null) => void;
@@ -48,14 +71,38 @@ export interface HypergraphView {
   select(id: ID | null): void;
   /** 临时高亮（如表格行悬停），不触发回调；null 取消 / transient highlight, e.g. on table row hover; null clears */
   hover(target: Partial<Selection> | null): void;
+  /** 缩放平移到撑满画布（不超过 maxFitZoom），如工具栏的“适应画布” / fit the graph to the canvas, capped at maxFitZoom */
+  fitView(animate?: boolean): Promise<void>;
   destroy(): void;
 }
 
 // 变化时需要重新布局的选项；其余（颜色、轮廓）只重绘
-const LAYOUT_KEYS = ['data', 'mode', 'centerNode', 'graphEdges', 'labelText', 'layout', 'nodeSizeBy'] as const;
-const STYLE_KEYS = ['typeField', 'typeColors', 'nodeColors', 'hyperedgeColors', 'contours', 'contourBounds', 'theme'] as const;
+const LAYOUT_KEYS = [
+  'data',
+  'mode',
+  'centerNode',
+  'graphEdges',
+  'labelText',
+  'layout',
+  'nodeSizeBy',
+  'labelBy',
+  'fadedNodes',
+] as const;
+const STYLE_KEYS = [
+  'typeField',
+  'typeColors',
+  'nodeColors',
+  'hyperedgeColors',
+  'contours',
+  'contourBounds',
+  'theme',
+  'hideOverlappingLabels',
+] as const;
 // 影响布局的主题项（节点尺寸、标签字号）
 const LAYOUT_THEME_KEYS: (keyof HypergraphTheme)[] = ['nodeSize', 'largeNodeSize', 'largeGraphThreshold', 'labelFontSize'];
+
+const isFitView = (autoFit: ViewOptions['autoFit']) =>
+  autoFit === 'view' || (typeof autoFit === 'object' && autoFit?.type === 'view');
 
 // 首次渲染完成前销毁（换数据、StrictMode 二次挂载）时，npm 版 G6 在销毁元素层时抛异常；
 // 此时插件、交互、布局已销毁，补上画布销毁即可
@@ -83,6 +130,12 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   let selected: Extract<HypergraphHit, { kind: 'edge' | 'hyperedge' }> | null = null;
   let selection: Selection = initial.selection ?? EMPTY_SELECTION;
   let hovered: Partial<Selection> | null = null;
+  // 标签避让中不显示标签的节点（hideOverlappingLabels）；高亮、悬停的节点照常显示
+  let culled = new Set<ID>();
+  // 上次标签避让时的缩放；标签固定屏幕字号时，缩放变化后重新避让
+  let culledZoom = 1;
+  let statesStale = false;
+  let recullTimer: ReturnType<typeof setTimeout> | undefined;
 
   // 画布放进绝对定位的内层：画布的像素宽度不计入容器的固有尺寸，容器在 flex 布局中能随旁边面板出现而变窄
   const host = document.createElement('div');
@@ -96,6 +149,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     height: container.offsetHeight || options.fallbackHeight || 300,
     behaviors: options.behaviors ?? ['zoom-canvas', 'drag-canvas', 'drag-element'],
     autoFit: options.autoFit ?? 'center',
+    padding: isFitView(options.autoFit) ? (options.fitPadding ?? 24) : undefined,
     animation: false,
   });
 
@@ -114,7 +168,9 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     if (!spec) return null;
     if (e.targetType === 'node') {
       const node = spec.data.nodes!.find((n) => n.id === e.target.id);
-      return node ? { kind: 'node', id: node.id, item: node } : null;
+      if (!node) return null;
+      const fadedHyperedges = spec.faded.dropped.get(node.id);
+      return fadedHyperedges ? { kind: 'node', id: node.id, item: node, fadedHyperedges } : { kind: 'node', id: node.id, item: node };
     }
     if (e.targetType === 'edge') {
       const edge = spec.data.edges!.find((d) => d.id === e.target.id);
@@ -122,13 +178,14 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
       const { source, target, ...rest } = edge;
       const members = [source, target];
       const hyperedges = spec.lineHyperedges.get(edge.id!) || [];
-      // 连线上不带 type 等保留字段，从产生它的超边补回
+      // 连线上不带 type 等保留字段，从产生它的超边补回；成员补上淡出的
       const owner = spec.hyperedges.get(hyperedges[0]);
+      const faded = spec.faded.members.get(hyperedges[0]) || [];
       return {
         kind: 'edge',
         id: edge.id!,
         members,
-        item: { ...owner, ...rest, id: edge.id, members },
+        item: { ...owner, ...rest, id: edge.id, members: [...members, ...faded] },
         hyperedges,
       };
     }
@@ -156,11 +213,39 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     );
   };
 
+  // 被避让的节点加上 labelHidden 状态（高亮、悬停的除外）
+  const withCulledLabels = (states: Record<ID, string[]>) => {
+    culled.forEach((id) => {
+      const s = states[id];
+      if (s && !s.includes('highlight') && !s.includes('active')) states[id] = [...s, 'labelHidden'];
+    });
+    return states;
+  };
+
+  // 淡出实体与虚线的状态：悬停只剩一个成员的超边的成员时，显示它与淡出实体的虚线，其余不显示
+  let fadedPlaced = false;
+  const fadedStates = (states: Record<ID, string[]> = {}) => {
+    if (!spec || !fadedPlaced) return states;
+    const nodes = new Set(hovered?.nodes || []);
+    const shown = new Set<ID>();
+    spec.faded.links.forEach((link) => {
+      const on = nodes.has(link.target);
+      if (on) shown.add(link.source);
+      states[link.id] = [on ? 'fadedShown' : 'faded'];
+    });
+    spec.faded.nodes.forEach(({ id }) => {
+      states[id] = [shown.has(id) ? 'fadedShown' : 'faded'];
+    });
+    return states;
+  };
+
   // 高亮选中的实体 / 超边，无关的实体、连线、轮廓变淡；未选中时全部恢复
   const applySelection = () => {
     if (!spec) return;
     const { states, bubbles } = selectionStyles(spec, selection, hovered);
-    withoutContourUpdate(() => graph.setElementState(states, false)).catch(() => undefined);
+    withoutContourUpdate(() => graph.setElementState(fadedStates(withCulledLabels(states)), false)).catch(
+      () => undefined,
+    );
     graph.setPlugins((plugins) => decoratePlugins(plugins, bubbles));
   };
 
@@ -190,13 +275,62 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     if (next || selected) setSelected(next);
   });
 
+  // 画布悬停高亮：与表格行悬停共用 hovered，只在悬停目标变化时重设状态
+  let pointerKey = '';
+  const hoverPointer = (hit: HypergraphHit | null) => {
+    if (!options.hoverHighlight) return;
+    const target: Partial<Selection> | null = !hit
+      ? null
+      : hit.kind === 'node'
+        ? { nodes: [hit.id] }
+        : hit.kind === 'hyperedge'
+          ? { hyperedges: [hit.id] }
+          : hit.hyperedges?.length
+            ? { hyperedges: hit.hyperedges }
+            : null;
+    const key = target ? JSON.stringify(target) : '';
+    if (key === pointerKey) return;
+    pointerKey = key;
+    view.hover(target);
+  };
+
   graph.on('pointermove', (e: any) => {
-    if (!options.onHover) return;
     const hit = e.client ? hitOf(e) : null;
-    options.onHover(hit ? { ...hit, client: { x: e.client.x, y: e.client.y } } : null);
+    hoverPointer(hit);
+    options.onHover?.(hit ? { ...hit, client: { x: e.client.x, y: e.client.y } } : null);
   });
 
-  const onLeave = () => options.onHover?.(null);
+  // 拖动节点后重新避让
+  graph.on('node:dragend', () => updateCulledLabels());
+
+  // 标签固定屏幕字号：每次缩放、重绘后把节点标签图形按 1 / 缩放 反向缩放（重绘会新建或重置标签图形）。
+  // 不用 G6 的 fix-element-size：它只在滚轮缩放事件里更新缩放倍数，换数据后自动撑满改变了缩放，它仍按旧倍数修正
+  const fixLabelScale = () => {
+    if (!options.fixLabelSize || graph.destroyed) return;
+    const element = (graph as any).context.element;
+    if (!element) return;
+    const scale = 1 / (graph.getZoom() || 1);
+    graph.getNodeData().forEach((d) => {
+      const label = element.getElement(d.id)?.getShape?.('label');
+      if (label && label.getLocalScale()[0] !== scale) label.setLocalScale(scale);
+    });
+  };
+  graph.on(GraphEvent.AFTER_TRANSFORM, fixLabelScale);
+  graph.on(GraphEvent.AFTER_DRAW, fixLabelScale);
+  graph.on(GraphEvent.AFTER_RENDER, fixLabelScale);
+  // 标签固定屏幕字号时，缩放停下来后按新的缩放重新避让
+  graph.on(GraphEvent.AFTER_TRANSFORM, () => {
+    if (!options.fixLabelSize || !options.hideOverlappingLabels) return;
+    clearTimeout(recullTimer);
+    recullTimer = setTimeout(() => {
+      if (!graph.destroyed && Math.abs(graph.getZoom() / culledZoom - 1) > 0.05) updateCulledLabels();
+    }, 150);
+  });
+
+  const onLeave = () => {
+    hoverPointer(null);
+    options.onHover?.(null);
+  };
   container.addEventListener('pointerleave', onLeave);
 
   const observer = new ResizeObserver(() => {
@@ -206,8 +340,49 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   });
   observer.observe(container);
 
+  // 标签避让：按节点当前位置重新计算不显示的标签，中心优先，其次按所属超边数降序。
+  // 还有 render 排队时跳过（spec 已换成新数据，画布上还是旧的），由那次 render 完成后再算
+  const updateCulledLabels = () => {
+    if (graph.destroyed || !spec || renderPending) return;
+    const prev = culled;
+    culled = new Set();
+    if (options.hideOverlappingLabels) {
+      const style = spec.node.style as any;
+      const value = (v: any, d: any) => (typeof v === 'function' ? v(d) : v);
+      const degree = new Map<ID, number>();
+      spec.hyperedges.forEach((he) => he.members.forEach((m) => degree.set(m, (degree.get(m) || 0) + 1)));
+      const rank = (id: ID) => (id === options.centerNode ? Infinity : degree.get(id) || 0);
+      const drawn = new Set(graph.getNodeData().map((d) => d.id));
+      const nodes = spec.data.nodes!.filter((d) => drawn.has(d.id)).sort((a, b) => rank(b.id) - rank(a.id));
+      // 标签固定屏幕字号时，画布坐标里的标签大小为 字号 / 缩放
+      const scale = options.fixLabelSize ? graph.getZoom() || 1 : 1;
+      culledZoom = graph.getZoom();
+      const candidates = nodes.map((d) => {
+        const [x, y] = graph.getElementPosition(d.id);
+        const size = value(style.size, d);
+        return {
+          id: d.id,
+          x,
+          y,
+          r: (Array.isArray(size) ? Math.max(...size) : size || 0) / 2,
+          text: String(style.labelText ? value(style.labelText, d) : d.id),
+          fontSize: (value(style.labelFontSize, d) || 12) / scale,
+        };
+      });
+      culled = cullLabels(candidates, 12 / scale, 2 / scale);
+    }
+    // 换数据后第一次也要设置：id 相同的节点会保留上一份数据中的 labelHidden 状态
+    if (statesStale || prev.size || culled.size) {
+      statesStale = false;
+      applySelection();
+    }
+  };
+
   // 新数据的 spec，并把当前选择写进元素初始状态与轮廓透明度
   const buildSpec = () => {
+    culled = new Set();
+    fadedPlaced = false;
+    statesStale = true;
     const next = toG6Spec(options.data!, options);
     if (!isEmptySelection(selection) || hovered) {
       const { states, bubbles } = selectionStyles(next, selection, hovered);
@@ -221,6 +396,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   const render = () => {
     if (graph.destroyed || !options.data) return;
     hovered = null;
+    pointerKey = '';
     // 单选模式：换数据时清掉上一份数据的选中（id 相同的元素在 setOptions 后会保留原状态）
     if (!multi && selected) {
       selected = null;
@@ -254,6 +430,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     graph.setPlugins(next.plugins);
     withoutContourUpdate(() => graph.draw())
       .then(() => {
+        updateCulledLabels();
         (next.plugins as any[]).forEach((p) => {
           if (p.type === HOVER_BUBBLE_SETS && (redrawContours || !prevKeys.has(p.key))) {
             (graph.getPluginInstance(p.key) as any)?.redraw();
@@ -266,13 +443,81 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   // 推迟到微任务再 render，同一轮的多次更新只 render 一次；其间已被销毁（如 React StrictMode 挂载后立即卸载）则跳过，
   // 否则 G6 会报 "The graph instance has been destroyed"
   let renderPending = false;
+  // 每次 render 的编号：上一次的布局还没算完就换了数据（如打开子图后立即自动隐藏实体）时，旧布局写回位置会因节点已删除而失败，
+  // 这种被新 render 取代的失败不报告
+  let renderSeq = 0;
+  // 进行中的 render：期间销毁实例时，G6 在画布初始化之后仍会访问已销毁的画布（未捕获的 getCamera 异常），等它结束再销毁
+  let inflight: Promise<unknown> | null = null;
+  let disposed = false;
+  // 撑满画布时限制放大倍数：超过上限就按上限缩放并居中
+  const clampFitZoom = async () => {
+    const max = options.maxFitZoom ?? 2;
+    if (graph.destroyed || !isFitView(options.autoFit) || graph.getZoom() <= max) return;
+    await graph.zoomTo(max, false);
+    await graph.fitCenter(false);
+  };
+  // 布局完成后放置淡出实体（关联实体的中心附近的空位）并加上虚线，初始不显示
+  const addFaded = async () => {
+    if (graph.destroyed || !spec?.faded.nodes.length) return;
+    const style = spec.node.style as any;
+    const sizeOf = (d: any) => {
+      const size = typeof style.size === 'function' ? style.size(d) : style.size;
+      return Array.isArray(size) ? Math.max(...size) : size || 20;
+    };
+    const drawn = spec.data.nodes!.map((d) => {
+      const [x, y] = graph.getElementPosition(d.id);
+      return { id: d.id, x, y, r: sizeOf(d) / 2 };
+    });
+    const positions = placeFaded(
+      spec.faded.nodes.map((d) => ({ id: d.id, r: sizeOf(d) / 2 })),
+      drawn,
+      spec.faded.links,
+    );
+    fadedPlaced = true;
+    const states = fadedStates();
+    graph.addData({
+      nodes: spec.faded.nodes.map((d) => ({
+        ...d,
+        style: { ...positions.get(d.id), pointerEvents: 'none' },
+        states: states[d.id],
+      })),
+      edges: spec.faded.links.map(({ id, source, target }) => ({
+        id,
+        source,
+        target,
+        style: { lineDash: [4, 3], pointerEvents: 'none' },
+        states: states[id],
+      })),
+    });
+    await withoutContourUpdate(() => graph.draw());
+  };
+
   const scheduleRender = () => {
     if (renderPending) return;
     renderPending = true;
     queueMicrotask(() => {
       renderPending = false;
       // 实例在布局迭代中被销毁（换数据、卸载）时 render 会 reject
-      if (!graph.destroyed) graph.render().catch((e) => console.warn("[hypergraph-viz] render failed", e));
+      if (!graph.destroyed && !disposed) {
+        const seq = ++renderSeq;
+        const current = graph
+          .render()
+          .then(async () => {
+            if (seq !== renderSeq || disposed) return;
+            await clampFitZoom();
+            if (seq !== renderSeq || disposed) return;
+            await addFaded();
+            if (seq !== renderSeq || disposed) return;
+            updateCulledLabels();
+          })
+          .catch((e) => {
+            if (seq === renderSeq && !graph.destroyed && !disposed) console.warn('[hypergraph-viz] render failed', e);
+          })
+          .finally(() => {
+            if (inflight === current) inflight = null;
+          });
+        inflight = current;
+      }
     });
   };
 
@@ -284,7 +529,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     return LAYOUT_THEME_KEYS.some((k) => ra[k] !== rb[k]);
   };
 
-  return {
+  const view: HypergraphView = {
     graph,
     update(next) {
       const prev = options;
@@ -320,12 +565,25 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
       hovered = next;
       applySelection();
     },
+    async fitView(animate = true) {
+      if (graph.destroyed || !spec) return;
+      const max = options.maxFitZoom ?? 2;
+      await graph.fitView(undefined, animate ? { duration: 300 } : false);
+      if (graph.getZoom() > max) {
+        await graph.zoomTo(max, false);
+        await graph.fitCenter(false);
+      }
+    },
     destroy() {
+      disposed = true;
+      clearTimeout(recullTimer);
       observer.disconnect();
       container.removeEventListener('pointerleave', onLeave);
       spec = null;
-      destroyGraph(graph);
       host.remove();
+      if (inflight) inflight.finally(() => destroyGraph(graph));
+      else destroyGraph(graph);
     },
   };
+  return view;
 };

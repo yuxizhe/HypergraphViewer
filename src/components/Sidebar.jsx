@@ -69,7 +69,7 @@ const Sidebar = ({
     dataSourceError,
 }) => {
     const { t, lang } = useI18n();
-    const [open, setOpen] = useState({ source: true, stats: true, nodes: true, hyperedges: true });
+    const [open, setOpen] = useState({ source: true, stats: true, nodes: true, hyperedges: false });
     const [hyperedgeTypes, setHyperedgeTypes] = useState([]);
     const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
     // 换数据源、换页、搜索后列表回到顶部
@@ -174,7 +174,8 @@ const Sidebar = ({
                     )}
                 </Section>
 
-                <Section title={t("tab_nodes")} count={pagination.total} open={open.nodes} onToggle={toggle("nodes")} grow>
+                {/* 实体列表下方还有分页，最小高度多留一行 */}
+                <Section title={t("tab_nodes")} count={pagination.total} open={open.nodes} onToggle={toggle("nodes")} grow minH="min-h-[268px]">
                     <SearchBox value={searchTerm} onChange={setSearchTerm} placeholder={t("searchPlaceholder")} />
                     <TypeChips
                         chips={vertexTypeChips}

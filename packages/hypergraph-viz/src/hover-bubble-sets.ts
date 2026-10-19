@@ -7,7 +7,8 @@
  * - 首次渲染完成前被销毁（切换数据、组件卸载）时不再因 shape 为空而抛异常；
  * - 配置更新（graph.setPlugins / updatePlugin，如点击高亮改透明度）后立即应用到已画好的轮廓，
  *   npm 版基类的 update 只合并配置、不重画；
- * - graph 上的 SUPPRESS_CONTOUR_UPDATE 计数大于 0 时（只改样式、状态），不因元素更新而重算轮廓。
+ * - graph 上的 SUPPRESS_CONTOUR_UPDATE 计数大于 0 时（只改样式、状态），不因元素更新而重算轮廓；
+ * - 成员的元素还没创建时（换数据过程中，G6 先更新已有元素、后创建新元素）不重算，等 AFTER_RENDER 再画。
  * 以新类型名 'hover-bubble-sets' 注册，不覆盖 G6 内置的 'bubble-sets'。
  */
 import type { BubbleSetsOptions } from '@antv/g6';
@@ -20,7 +21,14 @@ export const BUBBLE_SETS_TARGET = 'bubble-sets';
 /** graph 上的计数字段：大于 0 时元素更新不触发轮廓重算 / counter on the graph: element updates skip contour recomputation while > 0 */
 export const SUPPRESS_CONTOUR_UPDATE = '__hypergraphSuppressContour';
 
-const SHAPE_EVENTS = [CommonEvent.POINTER_OVER, CommonEvent.POINTER_MOVE, CommonEvent.POINTER_LEAVE, CommonEvent.CLICK];
+// 滚轮也要转发：轮廓上的事件不会到达画布，否则在轮廓上无法滚轮缩放
+const SHAPE_EVENTS = [
+  CommonEvent.POINTER_OVER,
+  CommonEvent.POINTER_MOVE,
+  CommonEvent.POINTER_LEAVE,
+  CommonEvent.CLICK,
+  CommonEvent.WHEEL,
+];
 
 export class HoverBubbleSets extends KeyBoundsBubbleSets {
   private layouting = false;
@@ -39,6 +47,7 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
     graph.off(GraphEvent.AFTER_RENDER, self.drawBubbleSets);
     const baseDraw = self.drawBubbleSets;
     self.drawBubbleSets = () => {
+      if (!this.membersReady()) return;
       // 成员不变时基类会复用缓存路径；布局移动了节点，必须重算
       self.init();
       baseDraw();
@@ -50,11 +59,18 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
     graph.off(GraphEvent.AFTER_ELEMENT_UPDATE, self.updateBubbleSetsPath);
     const baseUpdatePath = self.updateBubbleSetsPath;
     self.updateBubbleSetsPath = (event: any) => {
-      if (!((graph as any)[SUPPRESS_CONTOUR_UPDATE] > 0)) baseUpdatePath(event);
+      if (!((graph as any)[SUPPRESS_CONTOUR_UPDATE] > 0) && this.membersReady()) baseUpdatePath(event);
     };
     graph.on(GraphEvent.AFTER_ELEMENT_UPDATE, self.updateBubbleSetsPath);
     graph.on(GraphEvent.BEFORE_LAYOUT, this.onBeforeLayout);
     graph.on(GraphEvent.AFTER_LAYOUT, this.onAfterLayout);
+  }
+
+  // 成员的元素都已创建。同一条超边在前后两份数据中成员不同（如另一份数据中淡出了某个成员）时，
+  // 换数据过程中已有成员的更新会触发重算，此时新成员还没有元素
+  private membersReady() {
+    const { element } = this.context as any;
+    return !!element && this.options.members.every((id) => element.getElement(id));
   }
 
   private onBeforeLayout = () => {

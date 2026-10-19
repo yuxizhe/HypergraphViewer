@@ -72,7 +72,39 @@ export interface SpecOptions {
   contourBounds?: 'key' | 'render';
   /** 节点大小：固定（默认），或按所属超边数 / fixed node size (default) or scaled by degree */
   nodeSizeBy?: 'fixed' | 'degree';
+  /**
+   * 标签：统一字号（默认），或按子图内度数分级——度数越大字号越大（基础字号 -2 到 +2）、颜色越深（theme.labelDegreeFill），中心加粗
+   * Uniform labels (default), or graded by degree in the subgraph: larger (base font size -2 to +2) and darker (theme.labelDegreeFill), the center in bold
+   */
+  labelBy?: 'uniform' | 'degree';
+  /**
+   * 标签避让：布局完成后，与更重要的标签（中心、度数高的）重叠的标签不显示，悬停、选中时显示。
+   * 通常与 layout.preventLabelOverlap: false 一起用（布局不为标签让位，超边更紧凑）
+   * Hide labels overlapping more important ones (center, higher degree) after layout; shown on hover and selection.
+   * Usually paired with layout.preventLabelOverlap: false
+   */
+  hideOverlappingLabels?: boolean;
+  /**
+   * 淡出的实体（如枢纽）：不参与布局、不显示，超边去掉它们后照常画出。去掉它们后只剩一个成员的超边不画；
+   * 悬停该成员时，淡出的实体在关联实体的中心附近淡入，以虚线连到它（悬停命中带上这些超边）
+   * Faded vertices (e.g. hubs): left out of the layout and not drawn; hyperedges are drawn without them. A hyperedge left with
+   * one member is not drawn; hovering that member fades in the faded vertex near the center of its neighbors with a dashed
+   * link (the hover hit carries those hyperedges)
+   */
+  fadedNodes?: ID[];
   layout?: LayoutSettings;
+}
+
+/**
+ * <zh/> 淡出实体与只剩一个成员的超边的成员之间的一条虚线：hyperedges 为产生它的、只剩一个成员的超边
+ *
+ * <en/> Dashed link between a faded vertex and a drawn one; hyperedges are the ones it comes from
+ */
+export interface FadedLink {
+  id: ID;
+  source: ID;
+  target: ID;
+  hyperedges: ID[];
 }
 
 export type HypergraphSpec = Required<Pick<GraphOptions, 'data' | 'node' | 'edge' | 'layout' | 'plugins'>> & {
@@ -80,7 +112,17 @@ export type HypergraphSpec = Required<Pick<GraphOptions, 'data' | 'node' | 'edge
   hyperedges: Map<ID, HyperedgeItem & { id: ID }>;
   /** 连线 id → 产生它的超边 id / line id → ids of the hyperedges it comes from */
   lineHyperedges: Map<ID, ID[]>;
+  /**
+   * 淡出的实体（未定位，布局后再放置）、它们的虚线、超边 id → 其中淡出的成员、
+   * 实体 → 只剩它一个成员的超边（完整成员）
+   * Faded vertices (placed after layout), their dashed links, hyperedge id → its faded members,
+   * vertex → the hyperedges it is the only drawn member of (full members)
+   */
+  faded: { nodes: NodeData[]; links: FadedLink[]; members: Map<ID, ID[]>; dropped: Map<ID, HyperedgeItem[]> };
 };
+
+/** 淡出实体虚线的 id / id of a faded vertex's dashed link */
+export const fadedLinkId = (faded: ID, node: ID) => `faded:${faded}->${node}`;
 
 // 2 元超边 / 拆出的连线的 id：两端按字典序拼接
 const PAIR_SEP = '|#|';
@@ -94,6 +136,17 @@ export const bubbleKeyOf = (id: ID) => `bubble-sets-${id}`;
  *
  * <en/> Convert a hypergraph into G6 options
  */
+// 两个 #rrggbb 颜色按 t 线性插值
+const mixColor = (a: string, b: string, t: number) => {
+  const ca = parseInt(a.slice(1), 16);
+  const cb = parseInt(b.slice(1), 16);
+  const channel = (shift: number) => {
+    const x = (ca >> shift) & 255;
+    return Math.round(x + (((cb >> shift) & 255) - x) * t);
+  };
+  return `#${((1 << 24) | (channel(16) << 16) | (channel(8) << 8) | channel(0)).toString(16).slice(1)}`;
+};
+
 export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): HypergraphSpec => {
   const {
     mode = 'hyper',
@@ -104,12 +157,20 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     contours = true,
     contourBounds = 'key',
     nodeSizeBy = 'fixed',
+    labelBy = 'uniform',
     layout: layoutSettings = {},
   } = options;
   const theme = resolveTheme(options.theme);
   const isGraph = mode === 'graph';
 
-  let nodes: NodeData[] = Object.entries(graph.vertices).map(([id, value]) => ({ ...value, id, label: id }));
+  const fadedSet = new Set((options.fadedNodes || []).filter((id) => id in graph.vertices));
+  const allNodes: NodeData[] = Object.entries(graph.vertices).map(([id, value]) => ({ ...value, id, label: id }));
+  let nodes = allNodes.filter((n) => !fadedSet.has(n.id));
+  const fadedNodes = allNodes.filter((n) => fadedSet.has(n.id));
+  const fadedLinks = new Map<ID, FadedLink>();
+  const fadedMembers = new Map<ID, ID[]>();
+  // 只剩一个成员的超边，按该成员记录
+  const dropped = new Map<ID, HyperedgeItem[]>();
   const edges: EdgeData[] = [];
   const lineHyperedges = new Map<ID, ID[]>();
   const pushLine = (a: ID, b: ID, attrs: Record<string, any>, owner: ID) => {
@@ -128,9 +189,26 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   const plugins: { type: string; key: string; [key: string]: any }[] = [];
 
   graph.hyperedges.forEach((he, i) => {
-    const members = [...new Set(he.members)];
-    if (members.length < 2) return;
+    const allMembers = [...new Set(he.members)];
+    if (allMembers.length < 2) return;
     const id = hyperedgeIdOf(he);
+    // 淡出的成员不画；只剩一个成员时该超边不画，记下这个成员与淡出成员的虚线
+    const members = allMembers.filter((m) => !fadedSet.has(m));
+    if (members.length < allMembers.length) {
+      const faded = allMembers.filter((m) => fadedSet.has(m));
+      fadedMembers.set(id, faded);
+      if (members.length === 1) {
+        const [m] = members;
+        dropped.set(m, [...(dropped.get(m) || []), { ...he, id, members: allMembers }]);
+        faded.forEach((f) => {
+          const linkId = fadedLinkId(f, m);
+          const link = fadedLinks.get(linkId);
+          if (link) link.hyperedges.push(id);
+          else fadedLinks.set(linkId, { id: linkId, source: f, target: m, hyperedges: [id] });
+        });
+      }
+      if (members.length < 2) return;
+    }
     const item = { ...he, id, members };
     hyperedges.set(id, item);
     // type、style、states 是 G6 元素的保留字段（如超边的 type 会被当成连线类型），不带到连线上
@@ -155,7 +233,8 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       members,
       // 默认只圈节点，不包裹标签
       memberBoundsType: contourBounds,
-      hyperedge: item,
+      // 悬停卡片等显示完整成员（含淡出的）
+      hyperedge: { ...item, members: allMembers },
       fill: color,
       stroke: color,
       ...theme.bubbleOptions,
@@ -186,20 +265,37 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     });
   }
 
-  const typeColors = options.typeColors ?? typeColorsOf(nodes, typeField, theme.typePalette);
+  const typeColors = options.typeColors ?? typeColorsOf(allNodes, typeField, theme.typePalette);
   const nodeColors = options.nodeColors ?? {};
   const large = nodes.length > theme.largeGraphThreshold;
   const hasCenter = centerNode !== undefined && nodes.some((n) => n.id === centerNode);
+  // 淡出的中心仍着中心色
+  const centerColored = hasCenter || (centerNode !== undefined && fadedSet.has(centerNode));
   const baseSize = large ? theme.largeNodeSize : theme.nodeSize;
 
-  // 按度数：最大度数的节点为 1.5 倍，度数 0 的为 0.75 倍
+  // 度数分级 t ∈ [0, 1]：按对数归一到除中心外的最大度数（中心出现在每条超边中，按它归一其他实体都挤在最低档），中心为 1
+  const degree = new Map<ID, number>();
+  hyperedges.forEach((he) => he.members.forEach((m) => degree.set(m, (degree.get(m) || 0) + 1)));
+  const maxDegree = Math.max(0, ...[...degree].filter(([id]) => id !== centerNode).map(([, d]) => d));
+  const levelOf = (id: ID) =>
+    id === centerNode || fadedSet.has(id) ? 1 : maxDegree ? Math.min(1, Math.log1p(degree.get(id) || 0) / Math.log1p(maxDegree)) : 0;
+
+  // 按度数：0.7 倍到 1.5 倍
   let sizeOf: number | ((d: NodeData) => number) = baseSize;
-  if (nodeSizeBy === 'degree') {
-    const degree = new Map<ID, number>();
-    hyperedges.forEach((he) => he.members.forEach((m) => degree.set(m, (degree.get(m) || 0) + 1)));
-    const max = Math.max(1, ...degree.values());
-    sizeOf = (d: NodeData) => Math.round(baseSize * (0.75 + 0.75 * Math.sqrt((degree.get(d.id) || 0) / max)));
-  }
+  if (nodeSizeBy === 'degree') sizeOf = (d: NodeData) => Math.round(baseSize * (0.7 + 0.8 * levelOf(d.id)));
+
+  // 标签按度数：字号 基础 -2 到 +2，颜色由浅灰到近黑；只有中心加粗（子图小时最高一档的实体很多，都加粗太重）
+  const byDegree = labelBy === 'degree';
+  const labelFontSizeOf: number | ((d: NodeData) => number) = byDegree
+    ? (d: NodeData) => Math.round(theme.labelFontSize - 2 + 4 * levelOf(d.id))
+    : theme.labelFontSize;
+  const [lowFill, highFill] = theme.labelDegreeFill;
+  const labelStyle = byDegree
+    ? {
+        labelFill: (d: NodeData) => mixColor(lowFill, highFill, levelOf(d.id)),
+        labelFontWeight: (d: NodeData) => (d.id === centerNode ? 'bold' : 'normal'),
+      }
+    : { labelFontWeight: 'normal' };
 
   const layoutType = layoutSettings.type ?? (isGraph ? 'force' : HYPERGRAPH_LAYOUT);
   const layoutCenter = hasCenter && layoutSettings.useCenter !== false ? centerNode : undefined;
@@ -219,7 +315,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       // 标签互不重叠：与节点样式的 labelText、字号保持一致
       preventLabelOverlap: layoutSettings.preventLabelOverlap ?? true,
       labelText,
-      labelFontSize: theme.labelFontSize,
+      labelFontSize: labelFontSizeOf,
       ...sizeOption,
     };
   } else if (!isGraph) {
@@ -241,32 +337,44 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     data: { nodes, edges },
     hyperedges,
     lineHyperedges,
+    faded: { nodes: fadedNodes, links: [...fadedLinks.values()], members: fadedMembers, dropped },
     plugins: isGraph || !contours ? [] : plugins,
     node: {
       palette: { field: 'cluster' } as any,
       style: {
         size: sizeOf as any,
         labelText,
-        labelFontSize: theme.labelFontSize,
+        labelFontSize: labelFontSizeOf as any,
         fill: (d: NodeData) =>
           nodeColors[d.id] ??
-          (hasCenter && d.id === centerNode ? theme.centerColor : typeColors[(d as any)[typeField]] || theme.nodeColor),
+          (centerColored && d.id === centerNode ? theme.centerColor : typeColors[(d as any)[typeField]] || theme.nodeColor),
         // 显式写出被状态覆盖的样式：G6 移除状态时只回到这里的值，不写就会保留状态样式
         opacity: 1,
         lineWidth: 0,
-        labelFontWeight: 'normal',
+        ...(labelStyle as any),
         halo: false,
+        label: true,
+        // 标签不接收指针事件：悬停、点击穿透到下面的轮廓或空白处
+        labelPointerEvents: 'none',
+        visibility: 'visible',
       },
       // 选中：选中实体 / 选中超边的成员 highlight，无关的 inactive；表格行悬停：active
       state: {
         highlight: { stroke: theme.highlightColor, lineWidth: 3, labelFontWeight: 'bold' },
         inactive: { opacity: theme.inactiveNodeOpacity },
         active: { opacity: 1, halo: true, haloStroke: theme.highlightColor, haloLineWidth: 12, haloStrokeOpacity: 0.3 },
+        // 标签避让中被隐藏的标签（hideOverlappingLabels）
+        labelHidden: { label: false },
+        // 淡出实体：平时不显示，相关元素悬停、选中时以虚线描边显示
+        faded: { visibility: 'hidden' },
+        fadedShown: { opacity: 0.9, stroke: theme.fadedColor, lineWidth: 2, lineDash: [3, 2] },
       },
     },
     edge: {
-      style: { size: isGraph ? 3 : 2, stroke: theme.edgeColor, lineWidth: 1, opacity: 1 } as any,
+      style: { size: isGraph ? 3 : 2, stroke: theme.edgeColor, lineWidth: 1, opacity: 1, visibility: 'visible' } as any,
       state: {
+        faded: { visibility: 'hidden' },
+        fadedShown: { stroke: theme.fadedColor, lineWidth: 1.5, opacity: 0.8 },
         highlight: { stroke: theme.highlightColor, lineWidth: 3 },
         inactive: { opacity: theme.inactiveEdgeOpacity },
         active: { stroke: theme.highlightColor, lineWidth: 3, opacity: 1 },

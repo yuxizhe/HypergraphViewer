@@ -89,7 +89,7 @@ const ElementTable = ({
     return (
         <div className="flex flex-col min-h-0 h-full">
             {typeChips.length > 0 && (
-                <div className="flex gap-1 mb-2 overflow-x-auto hide-scrollbar shrink-0">
+                <div className="flex gap-1 mb-2 overflow-x-auto shrink-0">
                     {typeChips.map((c) => (
                         <span
                             key={c.type ?? "__none"}

@@ -8,8 +8,9 @@ const TIP_MARGIN = 8;
 
 // 跟随鼠标的悬停卡片，替代 G6 tooltip 插件：插件把视口坐标与画布尺寸比较来翻转，
 // 且卡片插在画布容器内，图边缘的卡片会被裁掉。这里挂到 body，默认在指针右下，
-// 越出视口的一侧翻到指针另一侧，最后夹紧在视口内
-const HoverTip = ({ title, item, priority, exclude, limit, x, y }) => {
+// 越出视口的一侧翻到指针另一侧，最后夹紧在视口内。全屏时只显示全屏元素内的内容，挂到全屏元素上
+// related：与枢纽（淡出）实体的超边，画布上不画，列在实体属性后面
+const HoverTip = ({ title, item, priority, exclude, limit, related, x, y }) => {
     const { t } = useI18n();
     const ref = useRef(null);
     const [pos, setPos] = useState({ left: x + TIP_OFFSET, top: y + TIP_OFFSET });
@@ -27,7 +28,7 @@ const HoverTip = ({ title, item, priority, exclude, limit, x, y }) => {
         left = Math.max(TIP_MARGIN, Math.min(left, vw - w - TIP_MARGIN));
         top = Math.max(TIP_MARGIN, Math.min(top, vh - h - TIP_MARGIN));
         setPos((prev) => (prev.left === left && prev.top === top ? prev : { left, top }));
-    }, [item, x, y]);
+    }, [item, related, x, y]);
 
     return createPortal(
         <div
@@ -40,9 +41,22 @@ const HoverTip = ({ title, item, priority, exclude, limit, x, y }) => {
                     {t(title)}
                 </div>
                 <PropertyList item={item} priority={priority} exclude={exclude} limit={limit} />
+                {related?.length > 0 && (
+                    <div>
+                        <div className="font-semibold text-gray-900 mb-1">{t("fadedRelations")}</div>
+                        <div className="space-y-1.5">
+                            {related.map((r) => (
+                                <div key={r.id} className="border-l-2 border-primary-500 pl-2">
+                                    <div className="text-xs font-semibold text-primary-700">{r.with.join("、")}</div>
+                                    {r.text && <div className="text-xs text-gray-600 line-clamp-6">{r.text}</div>}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>,
-        document.body
+        document.fullscreenElement || document.body
     );
 };
 

@@ -6,7 +6,7 @@ const TypeChips = ({ chips, selected, onToggle, onClear }) => {
     const { t } = useI18n();
     if (!chips.length) return null;
     return (
-        <div className="flex gap-1 mb-2 overflow-x-auto hide-scrollbar shrink-0">
+        <div className="flex gap-1 mb-2 overflow-x-auto shrink-0">
             {chips.map((c) => (
                 <button
                     key={c.type ?? "__none"}

@@ -13,6 +13,9 @@ const hyperedgeName = (item, members) =>
 
 // 右侧面板：当前子图的统计、实体 / 超边表（选择、显隐、颜色）、渲染设置，各为一张可收起的卡片；
 // 实体、超边默认展开并分享剩余高度，渲染、详情默认收起
+// 整个面板（文字、表格、间距）缩小 10%，给画布多留空间
+const PANEL_ZOOM = { zoom: 0.9 };
+
 const InspectorPanel = ({
     hypergraph,
     visibleHypergraph,
@@ -143,7 +146,7 @@ const InspectorPanel = ({
 
     if (collapsed) {
         return (
-            <div className="shrink-0 w-8 h-full bg-white/95 border-l border-gray-200/50 flex flex-col items-center pt-3">
+            <div className="shrink-0 w-8 h-full bg-white/95 border-l border-gray-200/50 flex flex-col items-center pt-3" style={PANEL_ZOOM}>
                 <button
                     onClick={() => setCollapsed(false)}
                     className="hover:[&>svg]:text-primary-600"
@@ -166,10 +169,12 @@ const InspectorPanel = ({
             ids.forEach((id) => (on ? set.add(id) : set.delete(id)));
             return { ...s, [kind]: [...set] };
         });
+    // 手动隐藏为彻底隐藏，恢复时一并去掉淡出标记
     const toggleHidden = (kind) => (id) =>
         setHidden((h) => ({
             ...h,
             [kind]: h[kind].includes(id) ? h[kind].filter((x) => x !== id) : [...h[kind], id],
+            faded: (h.faded || []).filter((x) => x !== id),
         }));
 
     // 统计卡片中点柱子 / 色段：选中并展开对应的表格
@@ -181,6 +186,7 @@ const InspectorPanel = ({
 
     const hideSelected = () => {
         setHidden((h) => ({
+            faded: (h.faded || []).filter((id) => !selection.nodes.includes(id)),
             nodes: [...new Set([...h.nodes, ...selection.nodes])],
             hyperedges: [...new Set([...h.hyperedges, ...selection.hyperedges])],
         }));
@@ -202,7 +208,7 @@ const InspectorPanel = ({
     const counts = { nodes: stats?.vertexCount ?? 0, hyperedges: stats?.members.size ?? 0 };
 
     return (
-        <div className="shrink-0 w-96 h-full flex flex-col bg-white/95 backdrop-blur-sm border-l border-gray-200/50 shadow-xl">
+        <div className="shrink-0 w-96 h-full flex flex-col bg-white/95 backdrop-blur-sm border-l border-gray-200/50 shadow-xl" style={PANEL_ZOOM}>
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0">
                 <span className="text-base font-bold text-gray-800">{t("panelTitle")}</span>
                 <button
@@ -228,9 +234,13 @@ const InspectorPanel = ({
                                 centerNode={centerNode}
                                 hidden={hidden}
                                 onPick={pick}
+                                // 枢纽淡出：画布上不画，悬停、选中相关元素时显示关联
                                 onToggleHubs={(ids, hide) => setHidden((h) => ({
                                     ...h,
                                     nodes: hide ? [...new Set([...h.nodes, ...ids])] : h.nodes.filter((id) => !ids.includes(id)),
+                                    faded: hide
+                                        ? [...new Set([...(h.faded || []), ...ids])]
+                                        : (h.faded || []).filter((id) => !ids.includes(id)),
                                 }))}
                             />
                         </Section>
@@ -280,7 +290,11 @@ const InspectorPanel = ({
                                 onColor={colors.setHyperedgeColor}
                                 onColorReset={(id) => colors.setHyperedgeColor(id, null)}
                                 onRowHover={(id) => onRowHover(id === null ? null : { hyperedges: [id] })}
-                                onRowClick={(id) => onShowDetails("hyperedge", id)}
+                                onRowClick={(id) => {
+                                    // 点超边行即选中 / 取消选中（隐藏的不能选，同勾选框），并在详情区显示
+                                    if (!hiddenHyperedges.has(id)) toggleIn("hyperedges")(id);
+                                    onShowDetails("hyperedge", id);
+                                }}
                                 focusId={focusId}
                             />
                         </Section>

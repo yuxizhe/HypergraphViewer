@@ -22,11 +22,12 @@ body {
   overflow: hidden;
 }
 
-.hide-scrollbar {
+/* 隐藏所有滚动条（Windows 下的滚动条很突兀），滚轮、触控板照常滚动 */
+* {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-.hide-scrollbar::-webkit-scrollbar {
+*::-webkit-scrollbar {
   display: none;
 }

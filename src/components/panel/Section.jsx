@@ -13,12 +13,13 @@ export const Chevron = ({ open, dir }) => (
     </svg>
 );
 
-// 可展开收起的卡片；展开 / 收起箭头在标题行右侧。grow 时展开后占满剩余高度（表格在卡片内滚动）
+// 可展开收起的卡片；展开 / 收起箭头在标题行右侧。grow 时展开后占满剩余高度（表格在卡片内滚动），
+// 高度不小于 minH（默认 240px：标题、类型标签、筛选框、表头约 135px，加 4 行 100px），空间不够时整栏滚动
 // subtitle：标题后的灰字（如当前数据源）
-const Section = ({ title, count, subtitle, open, onToggle, grow, sectionRef, children }) => (
+const Section = ({ title, count, subtitle, open, onToggle, grow, minH = "min-h-60", sectionRef, children }) => (
     <div
         ref={sectionRef}
-        className={`flex flex-col border-b border-gray-200 ${open && grow ? "flex-1 min-h-44" : "shrink-0"}`}
+        className={`flex flex-col border-b border-gray-200 ${open && grow ? `flex-1 ${minH}` : "shrink-0"}`}
     >
         <button
             onClick={onToggle}

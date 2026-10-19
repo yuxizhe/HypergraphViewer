@@ -4,6 +4,16 @@ A Hypergraph Visualization Framework in JavaScript. Support JSON/HIF/Hypergraph-
 
 DEMO page: https://yuxizhe.github.io/HypergraphViewer/
 
+## Screenshots
+
+<img width="100%" alt="Hypergraph Viewer: database panel, hypergraph canvas and subgraph inspector" src="docs/images/screenshot.png" />
+
+### Hyper-RAG
+
+<img width="100%" alt="image" src="https://github.com/user-attachments/assets/2f42d377-c56d-45f8-ad33-0f50c1a98de7" />
+
+<img width="100%" alt="image" src="https://github.com/user-attachments/assets/f9c6b3d6-619d-41b3-9765-29c0f1f8736d" />
+
 ## hypergraph-viz (npm package)
 
 [![npm](https://img.shields.io/npm/v/hypergraph-viz)](https://www.npmjs.com/package/hypergraph-viz)
@@ -62,16 +72,6 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
 ```
 
 `@antv/g6` (5.0.x) is a peer dependency: the extensions are registered on the host project's G6, so keep a single copy of G6 in the project. See the [package README](packages/hypergraph-viz/README.md) for all options.
-
-## Screenshots
-
-<img width="100%" alt="Hypergraph Viewer: database panel, hypergraph canvas and subgraph inspector" src="docs/images/screenshot.png" />
-
-### Hyper-RAG
-
-<img width="100%" alt="image" src="https://github.com/user-attachments/assets/2f42d377-c56d-45f8-ad33-0f50c1a98de7" />
-
-<img width="100%" alt="image" src="https://github.com/user-attachments/assets/f9c6b3d6-619d-41b3-9765-29c0f1f8736d" />
 
 ## Features
 

@@ -20,6 +20,8 @@ export interface HypergraphTheme {
   centerColor: string;
   /** 点击选中时的描边颜色 / stroke color of selected elements */
   highlightColor: string;
+  /** 淡出实体（fadedNodes）的描边与虚线颜色 / color of faded vertices' outline and links */
+  fadedColor: string;
   /** 连线（2 元超边）颜色 / color of lines (2-member hyperedges) */
   edgeColor: string;
   nodeSize: number;
@@ -27,6 +29,8 @@ export interface HypergraphTheme {
   largeNodeSize: number;
   largeGraphThreshold: number;
   labelFontSize: number;
+  /** 标签按度数分级（labelBy: 'degree'）时，度数最小、最大的标签颜色 / label colors of the lowest and highest degree with labelBy: 'degree' */
+  labelDegreeFill: [string, string];
   /** 超边轮廓：常态 / 点击选中 / 其他超边被选中时变淡 / contour: normal, selected, another one selected */
   bubble: { normal: BubbleState; highlight: BubbleState; dimmed: BubbleState };
   /** bubble-sets 的路由与轮廓参数，默认贴紧节点（nodeR0 1 / nodeR1 5）/ bubble-sets routing and contour options */
@@ -67,11 +71,13 @@ export const DEFAULT_THEME: HypergraphTheme = {
   nodeColor: '#8b5cf6',
   centerColor: '#6d28d9',
   highlightColor: '#6d28d9',
+  fadedColor: '#7c3aed',
   edgeColor: '#a68fff',
   nodeSize: 20,
   largeNodeSize: 15,
   largeGraphThreshold: 100,
   labelFontSize: 12,
+  labelDegreeFill: ['#9ca3af', '#111827'],
   bubble: {
     normal: { fillOpacity: 0.2, strokeOpacity: 0.2, lineWidth: 1 },
     highlight: { fillOpacity: 0.45, strokeOpacity: 1, lineWidth: 3 },
