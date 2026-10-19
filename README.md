@@ -1,6 +1,6 @@
 # HypergraphViewer
 
-A Hypergraph Visualization Framework in JavaScript. Support JSON/HIF/Hypergraph-DB/Hyper-RAG
+Make every hypergraph viewable and readable.
 
 DEMO page: https://yuxizhe.github.io/HypergraphViewer/
 
