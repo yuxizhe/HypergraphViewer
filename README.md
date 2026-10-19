@@ -85,7 +85,7 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
 
 ```html
 <script src="https://unpkg.com/@antv/g6@5.0.49/dist/g6.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hypergraph-viz@0.1.1/dist/hypergraph-viz.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hypergraph-viz@0.2.0/dist/hypergraph-viz.global.js"></script>
 <script>
   const view = HypergraphViz.createHypergraphView(document.getElementById('graph'), { data });
 </script>

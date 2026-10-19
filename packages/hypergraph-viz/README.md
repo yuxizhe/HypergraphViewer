@@ -51,6 +51,21 @@ const colors = hyperedgeColorsOf(graph);                       // 在完整数�
 />
 ```
 
+### 标签、悬停与视口
+
+```tsx
+<HypergraphView
+  data={visible}
+  hoverHighlight                     // 指针悬停在实体 / 超边上时高亮，同 hover()
+  autoFit="view" fixLabelSize        // 渲染后缩放撑满画布；标签字号不随缩放变化
+  labelBy="degree"                   // 子图内度数越大，标签字号越大、颜色越深
+  hideOverlappingLabels              // 与更重要的标签重叠的标签不显示（悬停、选中时显示）
+  layout={{ type: 'hypergraph', preventLabelOverlap: false }}
+  fadedNodes={hubIds}                // 枢纽淡出：不参与布局；悬停与它相关的实体时淡入并连线
+/>
+viewRef.current.fitView();           // 视图居中
+```
+
 `layout.type` 还可以是 `'force'`（改造前的力导 + 主超边聚类）、`'force-atlas2'`、`'circular'`。
 数据或布局相关选项变化时重新布局；只有颜色、轮廓、主题配色变化时只重绘，节点位置不变。
 对象类选项（`typeColors`、`layout`、`theme` 等）需由宿主保持引用稳定（`useMemo`）。
