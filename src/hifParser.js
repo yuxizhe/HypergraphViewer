@@ -20,7 +20,7 @@ export const parseHIF = async (content, filename = '') => {
         }
 
         // Check if it's a HIF format (could have different structure)
-        if (data.hypergraph || data.nodes || data.edges || data.hyperedges) {
+        if (data.hypergraph || data.nodes || data.edges || data.hyperedges || Array.isArray(data.incidences)) {
             return convertHIFToInternal(data);
         }
 
@@ -43,6 +43,9 @@ export const parseHIF = async (content, filename = '') => {
  * @returns {Object} Internal format data
  */
 const convertHIFToInternal = (hifData) => {
+    // HIF 标准：incidences 必填，nodes / edges 可省略
+    if (Array.isArray(hifData.incidences)) return convertStandardHIF(hifData);
+
     const result = {
         database: {
             name: hifData.name || hifData.hypergraph?.name || "imported_hypergraph",
@@ -56,7 +59,6 @@ const convertHIFToInternal = (hifData) => {
     // Handle different HIF structures
     let nodes = hifData.nodes || hifData.vertices || hifData.hypergraph?.nodes || [];
     let edges = hifData.edges || hifData.hyperedges || hifData.hypergraph?.edges || [];
-    let incidences = hifData.incidences || [];
 
     // Convert nodes to vertices
     if (Array.isArray(nodes)) {
@@ -66,7 +68,6 @@ const convertHIFToInternal = (hifData) => {
             description: node.description || node.label || "",
             degree: node.degree || 0,
             entity_name: node.name || node.id || node.node,
-            // HIF 标准把属性放在 attrs 中（如 entity_type）
             ...node.attrs,
             ...node.properties,
         }));
@@ -82,64 +83,9 @@ const convertHIFToInternal = (hifData) => {
         }));
     }
 
-    // Build graphs from edges and incidences
+    // Build graphs from edges
     const graphsMap = {};
-    let edgeGroups = {};
-
-    // Process incidences if available
-    if (Array.isArray(incidences) && incidences.length > 0) {
-        // 超边自身的属性（HIF edges[].attrs，如 type、description）
-        const edgeAttrs = {};
-        if (Array.isArray(edges)) {
-            edges.forEach(edge => {
-                const name = edge.edge ?? edge.id ?? edge.name;
-                if (name !== undefined) edgeAttrs[name] = { ...edge.attrs, ...edge.properties };
-            });
-        }
-
-        // Group incidences by edge；每个实体首条关联记录上的 attrs 作为超边没有 attrs 时的兜底
-        const firstIncidenceAttrs = new Map();
-        incidences.forEach(incidence => {
-            const edgeName = incidence.edge;
-            if (!edgeGroups[edgeName]) {
-                edgeGroups[edgeName] = [];
-            }
-            edgeGroups[edgeName].push(incidence.node);
-            if (!firstIncidenceAttrs.has(incidence.node)) firstIncidenceAttrs.set(incidence.node, incidence.attrs);
-        });
-
-        // 按 id 索引实体；逐个 find 在几千个实体时要数秒
-        const vertexById = new Map(result.vertices.map(v => [v.id, v]));
-
-        // Build graphs from incidence groups
-        Object.entries(edgeGroups).forEach(([edgeName, nodeIds]) => {
-            const edgeKey = nodeIds.join('|#|');
-            const memberVertices = nodeIds.map(id => vertexById.get(id)).filter(Boolean);
-            nodeIds.forEach(nodeId => {
-                if (!graphsMap[nodeId]) {
-                    graphsMap[nodeId] = {
-                        vertices: {},
-                        edges: {}
-                    };
-                }
-
-                // Add connected vertices
-                memberVertices.forEach(vertex => {
-                    graphsMap[nodeId].vertices[vertex.id] = vertex;
-                });
-
-                // Add edge
-                graphsMap[nodeId].edges[edgeKey] = {
-                    weight: 1,
-                    edgeName,
-                    // 罗列其他属性：超边自身的 attrs；没有时沿用该实体关联记录上的 attrs
-                    ...(edgeAttrs[edgeName] || firstIncidenceAttrs.get(nodeId))
-
-                };
-            });
-        });
-    } else if (Array.isArray(edges)) {
-        // Fallback to traditional edge processing
+    if (Array.isArray(edges)) {
         edges.forEach(edge => {
             const nodeIds = edge.nodes || edge.vertices || [edge.source, edge.target].filter(Boolean);
 
@@ -174,11 +120,98 @@ const convertHIFToInternal = (hifData) => {
 
     result.graphs = graphsMap;
     result.database.vertices = result.vertices.length;
-    result.database.edges = incidences.length > 0 ?
-        Object.keys(edgeGroups || {}).length :
-        (Array.isArray(edges) ? edges.length : 0);
+    result.database.edges = Array.isArray(edges) ? edges.length : 0;
 
     return result;
+};
+
+/**
+ * Convert standard HIF (https://github.com/HIF-org/HIF-standard) to internal format
+ * 节点、超边 id 可以是数字或字符串，统一转为字符串（graphs 的 key 本就是字符串）；
+ * 重复的节点、超边、关联合并；只出现在关联中的节点也是实体；孤立节点也可作为中心
+ * @param {Object} hifData - HIF format data
+ * @returns {Object} Internal format data
+ */
+const convertStandardHIF = (hifData) => {
+    const metadata = hifData.metadata || {};
+    const toAttrs = (item) => ({ ...item.attrs, ...item.properties });
+
+    // 节点：重复出现时合并属性
+    const vertexById = new Map();
+    const addVertex = (rawId, attrs = {}) => {
+        if (rawId === undefined || rawId === null) return;
+        const id = String(rawId);
+        const prev = vertexById.get(id);
+        vertexById.set(id, {
+            description: "",
+            degree: 0,
+            entity_name: id,
+            ...prev,
+            ...attrs,
+            id,
+        });
+    };
+    (Array.isArray(hifData.nodes) ? hifData.nodes : []).forEach((node) => {
+        addVertex(node.node ?? node.id ?? node.name, toAttrs(node));
+    });
+
+    // 超边自身的属性（HIF edges[].attrs，如 type、description）
+    const edgeAttrs = new Map();
+    (Array.isArray(hifData.edges) ? hifData.edges : []).forEach((edge) => {
+        const name = edge.edge ?? edge.id ?? edge.name;
+        if (name === undefined || name === null) return;
+        const key = String(name);
+        edgeAttrs.set(key, { ...edgeAttrs.get(key), ...toAttrs(edge) });
+    });
+
+    // 按超边分组关联，同一 (超边, 节点) 只保留一次；每个实体首条关联记录上的属性作为超边没有 attrs 时的兜底
+    const edgeGroups = new Map();
+    const firstIncidenceAttrs = new Map();
+    hifData.incidences.forEach((incidence) => {
+        if (incidence.edge === undefined || incidence.edge === null) return;
+        if (incidence.node === undefined || incidence.node === null) return;
+        const edgeName = String(incidence.edge);
+        const nodeId = String(incidence.node);
+        if (!vertexById.has(nodeId)) addVertex(nodeId);
+        if (!edgeGroups.has(edgeName)) edgeGroups.set(edgeName, new Set());
+        edgeGroups.get(edgeName).add(nodeId);
+        if (!firstIncidenceAttrs.has(nodeId)) firstIncidenceAttrs.set(nodeId, incidence.attrs);
+    });
+
+    const graphsMap = {};
+    const graphOf = (nodeId) => (graphsMap[nodeId] ??= { vertices: {}, edges: {} });
+    edgeGroups.forEach((members, edgeName) => {
+        const nodeIds = [...members];
+        const edgeKey = nodeIds.join('|#|');
+        nodeIds.forEach((nodeId) => {
+            const graph = graphOf(nodeId);
+            nodeIds.forEach((id) => {
+                graph.vertices[id] = vertexById.get(id);
+            });
+            graph.edges[edgeKey] = {
+                weight: 1,
+                edgeName,
+                // 罗列其他属性：超边自身的 attrs；没有时沿用该实体关联记录上的 attrs
+                ...(edgeAttrs.get(edgeName) || firstIncidenceAttrs.get(nodeId)),
+            };
+        });
+    });
+    // 没有关联的孤立节点：子图只有它自己
+    vertexById.forEach((vertex, id) => {
+        if (!graphsMap[id]) graphOf(id).vertices[id] = vertex;
+    });
+
+    const edgeNames = new Set([...edgeAttrs.keys(), ...edgeGroups.keys()]);
+    return {
+        database: {
+            name: hifData.name || metadata.name || "imported_hypergraph",
+            vertices: vertexById.size,
+            edges: edgeNames.size,
+            ...(hifData["network-type"] && { networkType: hifData["network-type"] }),
+        },
+        vertices: [...vertexById.values()],
+        graphs: graphsMap,
+    };
 };
 
 /**
