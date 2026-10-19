@@ -35,6 +35,7 @@ export const HypergraphView = forwardRef<View | null, HypergraphViewProps>(funct
       update: (next) => viewRef.current?.update(next),
       select: (id) => viewRef.current?.select(id),
       hover: (target) => viewRef.current?.hover(target),
+      fitView: async (animate) => viewRef.current?.fitView(animate),
       destroy: () => viewRef.current?.destroy(),
     }),
     [],
@@ -44,6 +45,10 @@ export const HypergraphView = forwardRef<View | null, HypergraphViewProps>(funct
     const view = createHypergraphView(containerRef.current!, {
       fallbackHeight: options.fallbackHeight,
       autoFit: options.autoFit,
+      maxFitZoom: options.maxFitZoom,
+      fitPadding: options.fitPadding,
+      fixLabelSize: options.fixLabelSize,
+      hoverHighlight: options.hoverHighlight,
       behaviors: options.behaviors,
       onHover: (hit) => callbacks.current.onHover?.(hit),
       onSelect: (hit) => callbacks.current.onSelect?.(hit),
@@ -62,16 +67,16 @@ export const HypergraphView = forwardRef<View | null, HypergraphViewProps>(funct
   // 对象类选项需由宿主保持引用稳定（useMemo），否则每次渲染都会重新布局
   const {
     data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
-    nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, layout, selection,
+    nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection,
   } = options;
   useEffect(() => {
     viewRef.current?.update({
       data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
-      nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, layout, selection,
+      nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection,
     });
   }, [
     data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
-    nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, layout, selection,
+    nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection,
   ]);
 
   return <div ref={containerRef} className={className} style={{ width: '100%', height: '100%', ...style }} />;

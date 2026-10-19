@@ -72,7 +72,7 @@ export interface HypergraphLayoutOptions extends BaseLayoutOptions {
    * <en/> Label font size
    * @defaultValue 12
    */
-  labelFontSize?: number;
+  labelFontSize?: number | ((node: NodeData) => number);
   /**
    * <zh/> 标签最大宽度，超出时按换行估算（与节点样式 `labelMaxWidth` + `labelWordWrap` 对应）
    *
@@ -870,7 +870,7 @@ function step(sim: Simulation, options: HypergraphLayoutOptions) {
  * @param char - <zh/> 字符 | <en/> character
  * @returns <zh/> 宽度 | <en/> width
  */
-function charWidth(char: string) {
+export function charWidth(char: string) {
   const code = char.charCodeAt(0);
   if (code >= 0x2e80) return 1;
   if (code >= 65 && code <= 90) return 0.72;
@@ -899,16 +899,17 @@ function measureLabels(nodes: NodeData[], radius: Float64Array, options: Hypergr
   nodes.forEach((node, i) => {
     let width = 0;
     let lines = 0;
+    const fontSize = typeof labelFontSize === 'function' ? labelFontSize(node) : labelFontSize;
     textOf(node)
       .split('\n')
       .forEach((line) => {
         let w = 0;
-        for (const char of line) w += labelFontSize * charWidth(char);
+        for (const char of line) w += fontSize * charWidth(char);
         lines += Math.max(1, Math.ceil(w / labelMaxWidth));
         width = Math.max(width, Math.min(w, labelMaxWidth));
       });
     const hw = width / 2 + labelPadding / 2;
-    const hh = (lines * labelFontSize * 1.3) / 2 + labelPadding / 2;
+    const hh = (lines * fontSize * 1.3) / 2 + labelPadding / 2;
     const r = radius[i];
     const [dx, dy] = {
       bottom: [0, r + hh],

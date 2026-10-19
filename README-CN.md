@@ -1,6 +1,6 @@
 # Hypergraph Viewer - React Version (中文版)
 
-这是一个基于 JS 构建的超图可视化工具。
+让超图看得见，也看得懂。
 
 <img width="100%" alt="Hypergraph Viewer 界面：数据库面板、超图画布与当前子图面板" src="docs/images/screenshot-cn.png" />
 

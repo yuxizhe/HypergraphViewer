@@ -3,6 +3,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  cullLabels,
+  DEFAULT_THEME,
   EMPTY_SELECTION,
   filterHypergraph,
   hyperedgeColorsOf,
@@ -12,6 +14,7 @@ import {
   toG6Spec,
 } from '../src';
 import type { HypergraphData } from '../src';
+import { placeFaded } from '../src/faded';
 
 // hub 在 6 条超边中的 5 条；x、y 与其余部分不连通
 const data: HypergraphData = {
@@ -193,5 +196,97 @@ describe('spec options', () => {
 
   it('sets contour bounds', () => {
     expect((toG6Spec(data, { contourBounds: 'render' }).plugins as any[])[0].memberBoundsType).toBe('render');
+  });
+});
+
+describe('cullLabels', () => {
+  const at = (id: string, x: number, y: number, text = id) => ({ id, x, y, r: 10, text });
+
+  it('keeps labels in order and hides the ones overlapping a placed label', () => {
+    // a、b 的标签重叠（同一行、相距 20），c 离得远
+    const hidden = cullLabels([at('aaaaaaaa', 0, 0), at('bbbbbbbb', 20, 0), at('cccccccc', 0, 200)], 12);
+    expect([...hidden]).toEqual(['bbbbbbbb']);
+  });
+
+  it('hides a label covering another node', () => {
+    // b 的标签在 b 下方，正好盖住 c
+    expect([...cullLabels([at('a', 0, 0), at('bbbbbbbbbbbb', 300, 0), at('c', 300, 25)], 12)]).toEqual(['bbbbbbbbbbbb']);
+  });
+
+  it('ignores empty labels', () => {
+    expect(cullLabels([at('a', 0, 0, ''), at('b', 0, 1, '')], 12).size).toBe(0);
+  });
+
+  it('adds the labelHidden state style', () => {
+    const spec = toG6Spec(data, { hideOverlappingLabels: true });
+    expect((spec.node.state as any).labelHidden).toEqual({ label: false });
+    expect((spec.node.style as any).label).toBe(true);
+  });
+});
+
+describe('labelBy degree', () => {
+  it('grades label size, color and weight by degree', () => {
+    const spec = toG6Spec(data, { labelBy: 'degree' });
+    const style = spec.node.style as any;
+    expect(style.labelFontSize({ id: 'hub' })).toBe(14);
+    expect(style.labelFontSize({ id: 'x' })).toBeLessThan(14);
+    expect(style.labelFill({ id: 'hub' })).toBe(DEFAULT_THEME.labelDegreeFill[1]);
+    // 没有中心时不加粗
+    expect(style.labelFontWeight({ id: 'hub' })).toBe('normal');
+    // 布局按同样的字号估算标签
+    expect((spec.layout as any).labelFontSize({ id: 'hub' })).toBe(14);
+  });
+
+  it('keeps uniform labels by default', () => {
+    const style = toG6Spec(data).node.style as any;
+    expect(style.labelFontSize).toBe(DEFAULT_THEME.labelFontSize);
+    expect(style.labelFill).toBeUndefined();
+  });
+
+  it('puts the center at the top level', () => {
+    const style = toG6Spec(data, { labelBy: 'degree', nodeSizeBy: 'degree', centerNode: 'x' }).node.style as any;
+    expect(style.labelFontSize({ id: 'x' })).toBe(14);
+    expect(style.size({ id: 'x' })).toBe(30);
+    expect(style.labelFontWeight({ id: 'x' })).toBe('bold');
+    expect(style.labelFontWeight({ id: 'hub' })).toBe('normal');
+  });
+});
+
+describe('fadedNodes', () => {
+  const spec = toG6Spec(data, { fadedNodes: ['hub'] });
+
+  it('leaves faded vertices out of the drawn data and the layout', () => {
+    expect(spec.data.nodes!.map((n) => n.id)).not.toContain('hub');
+    expect(spec.faded.nodes.map((n) => n.id)).toEqual(['hub']);
+    expect((spec.layout as any).hyperedges.every((he: any) => !he.members.includes('hub'))).toBe(true);
+  });
+
+  it('draws hyperedges without faded members and drops those left with one member', () => {
+    expect(spec.hyperedges.get('e1')!.members).toEqual(['a', 'b']);
+    expect(spec.hyperedges.has('e4')).toBe(false);
+    expect(spec.faded.members.get('e4')).toEqual(['hub']);
+  });
+
+  it('links faded vertices only to members of dropped hyperedges', () => {
+    expect(spec.faded.links.map(({ source, target, hyperedges }) => [source, target, hyperedges])).toEqual([
+      ['hub', 'a', ['e4']],
+    ]);
+    expect(spec.faded.dropped.get('a')!.map((he) => [he.id, he.members])).toEqual([['e4', ['hub', 'a']]]);
+  });
+});
+
+describe('placeFaded', () => {
+  it('places near the centroid of linked vertices, clear of other nodes', () => {
+    const drawn = [
+      { id: 'a', x: -50, y: 0, r: 10 },
+      { id: 'b', x: 50, y: 0, r: 10 },
+      { id: 'c', x: 0, y: 0, r: 10 },
+    ];
+    const pos = placeFaded([{ id: 'h', r: 10 }], drawn, [
+      { source: 'h', target: 'a' },
+      { source: 'h', target: 'b' },
+    ]).get('h')!;
+    drawn.forEach((o) => expect(Math.hypot(o.x - pos.x, o.y - pos.y)).toBeGreaterThanOrEqual(35));
+    expect(Math.hypot(pos.x, pos.y)).toBeLessThan(60);
   });
 });

@@ -95,9 +95,6 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                 <Row label={t("nodeSpacing")} relayout disabled={!hypergraphLayout}>
                     <Slider value={settings.nodeSpacing} min={10} max={100} step={5} onChange={set("nodeSpacing")} />
                 </Row>
-                <Row label={t("preventLabelOverlap")} relayout disabled={!hypergraphLayout}>
-                    <Switch checked={settings.preventLabelOverlap} onChange={set("preventLabelOverlap")} />
-                </Row>
                 <Row label={t("graphEdges")} relayout disabled={isHyper}>
                     <Segmented
                         value={settings.graphEdges}
@@ -155,18 +152,56 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                         options={[["fixed", t("sizeFixed")], ["degree", t("sizeDegree")]]}
                     />
                 </Row>
+                <Row label={t("autoHideDegree")} relayout>
+                    <input
+                        type="number"
+                        min={0}
+                        value={settings.autoHideDegree}
+                        onChange={(e) => set("autoHideDegree")(Math.max(0, Number(e.target.value) || 0))}
+                        title={t("autoHideDegreeHint")}
+                        className="w-14 px-1 py-0.5 text-[11px] text-right tabular-nums border border-gray-200 rounded"
+                    />
+                </Row>
             </Group>
 
             <Group title={t("groupLabel")}>
-                <Row label={t("labelMode")} relayout={settings.preventLabelOverlap && hypergraphLayout}>
+                <Row label={t("labelMode")} relayout={settings.labelOverlap === "layout" && hypergraphLayout}>
                     <Segmented
                         value={settings.labelMode}
                         onChange={set("labelMode")}
                         options={[["all", t("labelAll")], ["key", t("labelKey")], ["none", t("labelNone")]]}
                     />
                 </Row>
+                <Row label={t("labelBy")} relayout={settings.labelOverlap === "layout" && hypergraphLayout} disabled={settings.labelMode === "none"}>
+                    <Segmented
+                        value={settings.labelBy}
+                        onChange={set("labelBy")}
+                        options={[["uniform", t("labelUniform")], ["degree", t("labelByDegree")]]}
+                    />
+                </Row>
                 <Row label={t("labelFontSize")} relayout>
-                    <Slider value={settings.labelFontSize} min={10} max={16} onChange={set("labelFontSize")} />
+                    <Slider value={settings.labelFontSize} min={8} max={16} onChange={set("labelFontSize")} />
+                </Row>
+                <Row label={t("labelOverlap")} relayout={settings.labelOverlap === "layout" && hypergraphLayout} disabled={settings.labelMode === "none"}>
+                    <Segmented
+                        value={settings.labelOverlap}
+                        onChange={set("labelOverlap")}
+                        options={[
+                            ["hide", t("labelOverlapHide")],
+                            ...(hypergraphLayout ? [["layout", t("labelOverlapLayout")]] : []),
+                            ["allow", t("labelOverlapAllow")],
+                        ]}
+                    />
+                </Row>
+                <Row label={t("labelMaxLength")} relayout disabled={settings.labelMode === "none"}>
+                    <input
+                        type="number"
+                        min={0}
+                        value={settings.labelMaxLength}
+                        onChange={(e) => set("labelMaxLength")(Math.max(0, Number(e.target.value) || 0))}
+                        title={t("labelMaxLengthHint")}
+                        className="w-14 px-1 py-0.5 text-[11px] text-right tabular-nums border border-gray-200 rounded"
+                    />
                 </Row>
             </Group>
 

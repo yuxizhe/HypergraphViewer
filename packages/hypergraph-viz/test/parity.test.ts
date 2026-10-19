@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { HypergraphLayout as LegacyLayout } from './legacy/layouts/hypergraphLayout.js';
 import { processGraphData } from './legacy/dataProcessor.js';
 import { generateEntityTypeColors } from './legacy/constants.js';
-import { datas } from '../../../src/data.js';
+// 旧版内置的神经学数据（原 src/data.js），作为固定输入
+import { datas } from './fixtures/neurology-data.js';
 import { DEFAULT_THEME, fromKeyedEdges, HypergraphLayout, toG6Spec, typeColorsOf } from '../src';
 
 const centers = Object.keys(datas.graphs).slice(0, 6);
