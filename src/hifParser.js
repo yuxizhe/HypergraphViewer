@@ -66,6 +66,8 @@ const convertHIFToInternal = (hifData) => {
             description: node.description || node.label || "",
             degree: node.degree || 0,
             entity_name: node.name || node.id || node.node,
+            // HIF 标准把属性放在 attrs 中（如 entity_type）
+            ...node.attrs,
             ...node.properties,
         }));
     } else if (typeof nodes === 'object') {
@@ -75,6 +77,7 @@ const convertHIFToInternal = (hifData) => {
             description: node.description || node.label || "",
             degree: node.degree || 0,
             entity_name: node.name || node.id || id,
+            ...node.attrs,
             ...node.properties,
         }));
     }
@@ -85,6 +88,15 @@ const convertHIFToInternal = (hifData) => {
 
     // Process incidences if available
     if (Array.isArray(incidences) && incidences.length > 0) {
+        // 超边自身的属性（HIF edges[].attrs，如 type、description）
+        const edgeAttrs = {};
+        if (Array.isArray(edges)) {
+            edges.forEach(edge => {
+                const name = edge.edge ?? edge.id ?? edge.name;
+                if (name !== undefined) edgeAttrs[name] = { ...edge.attrs, ...edge.properties };
+            });
+        }
+
         // Group incidences by edge
         incidences.forEach(incidence => {
             const edgeName = incidence.edge;
@@ -118,8 +130,8 @@ const convertHIFToInternal = (hifData) => {
                     weight: 1,
                     type: "hyperedge",
                     edgeName,
-                    // 罗列其他属性
-                    ...incidences.find(incidence => incidence.node === nodeId).attrs
+                    // 罗列其他属性：超边自身的 attrs；没有时沿用该实体关联记录上的 attrs
+                    ...(edgeAttrs[edgeName] || incidences.find(incidence => incidence.node === nodeId).attrs)
 
                 };
             });
