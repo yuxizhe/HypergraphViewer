@@ -65,7 +65,7 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
 
 ## Screenshots
 
-<img width="100%" alt="image" src="https://github.com/user-attachments/assets/f9c36051-43c5-4e49-a725-08276aa99833" />
+<img width="100%" alt="Hypergraph Viewer: database panel, hypergraph canvas and subgraph inspector" src="docs/images/screenshot.png" />
 
 ### Hyper-RAG
 
@@ -82,6 +82,9 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
   - Mouse hover for detailed information
   - Draggable graph elements
   - Zoom and pan functionality
+- 🧭 **Side Panels** (collapsible cards):
+  - Left: data source, database stats, vertex and hyperedge lists with type filters
+  - Right: subgraph stats, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)
 - 📝 **Details Panel**: Real-time display of hyperedge and node properties
 - 🎯 **Pagination**: Efficient handling of large datasets
 
