@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useI18n } from '../i18n.jsx';
 
-export default function DataSourceSelector({ onDataSourceChange, currentSource, loading }) {
+// hideTitle：放进可收起卡片时由卡片显示标题
+export default function DataSourceSelector({ onDataSourceChange, currentSource, loading, hideTitle }) {
     const { t } = useI18n();
     const [sourceType, setSourceType] = useState(currentSource?.type || 'static');
     const [url, setUrl] = useState(currentSource?.url || '');
@@ -30,12 +31,14 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
     };
 
     return (
-        <div className="mb-6">
-            <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
-                {t("dataSource")}
-            </div>
+        <div className={hideTitle ? "" : "mb-6"}>
+            {!hideTitle && (
+                <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
+                    {t("dataSource")}
+                </div>
+            )}
 
-            <div className="space-y-4">
+            <div className={hideTitle ? "space-y-2" : "space-y-4"}>
                 {/* Static Data Option */}
                 <label className="flex items-center space-x-2 cursor-pointer">
                     <input
