@@ -1,17 +1,25 @@
 import React, { useState } from 'react';
 import { useI18n } from '../i18n.jsx';
+import { DATASETS, DEFAULT_DATASET } from '../datasets.js';
 
-export default function DataSourceSelector({ onDataSourceChange, currentSource, loading }) {
-    const { t } = useI18n();
+// hideTitle：放进可收起卡片时由卡片显示标题
+export default function DataSourceSelector({ onDataSourceChange, currentSource, loading, hideTitle }) {
+    const { t, lang } = useI18n();
     const [sourceType, setSourceType] = useState(currentSource?.type || 'static');
+    const [dataset, setDataset] = useState(currentSource?.dataset || DEFAULT_DATASET);
     const [url, setUrl] = useState(currentSource?.url || 'https://yuxizhe.github.io/HypergraphViewer/publications_main_component.hif.json');
     const [file, setFile] = useState(null);
 
     const handleSourceTypeChange = (type) => {
         setSourceType(type);
         if (type === 'static') {
-            onDataSourceChange({ type: 'static' });
+            onDataSourceChange({ type: 'static', dataset });
         }
+    };
+
+    const handleDatasetChange = (e) => {
+        setDataset(e.target.value);
+        onDataSourceChange({ type: 'static', dataset: e.target.value });
     };
 
     const handleUrlSubmit = (e) => {
@@ -30,24 +38,42 @@ export default function DataSourceSelector({ onDataSourceChange, currentSource, 
     };
 
     return (
-        <div className="mb-6">
-            <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
-                {t("dataSource")}
-            </div>
+        <div className={hideTitle ? "" : "mb-6"}>
+            {!hideTitle && (
+                <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
+                    {t("dataSource")}
+                </div>
+            )}
 
-            <div className="space-y-4">
-                {/* Static Data Option */}
-                <label className="flex items-center space-x-2 cursor-pointer">
-                    <input
-                        type="radio"
-                        name="dataSource"
-                        value="static"
-                        checked={sourceType === 'static'}
-                        onChange={() => handleSourceTypeChange('static')}
-                        className="text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">{t("useDefaultData")}</span>
-                </label>
+            <div className={hideTitle ? "space-y-2" : "space-y-4"}>
+                {/* Static Data Option：示例数据集 */}
+                <div className="space-y-2">
+                    <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                            type="radio"
+                            name="dataSource"
+                            value="static"
+                            checked={sourceType === 'static'}
+                            onChange={() => handleSourceTypeChange('static')}
+                            className="text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">{t("useDefaultData")}</span>
+                    </label>
+
+                    {sourceType === 'static' && (
+                        <select
+                            value={dataset}
+                            onChange={handleDatasetChange}
+                            disabled={loading}
+                            aria-label={t("useDefaultData")}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:opacity-50"
+                        >
+                            {DATASETS.map((d) => (
+                                <option key={d.id} value={d.id}>{d.name[lang] || d.name.en}</option>
+                            ))}
+                        </select>
+                    )}
+                </div>
 
                 {/* Remote URL Option */}
                 <div className="space-y-2">

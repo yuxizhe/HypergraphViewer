@@ -94,15 +94,13 @@ export const PropertyList = ({ item, priority = ["description"], exclude = [], l
         .map(([key, value]) => <PropertyRow key={key} name={key} value={value} />);
 };
 
+// 最后悬停 / 点选的超边与实体属性；放在右侧面板下部，不随 Tab 切换消失
 const DetailsPanel = ({ hoverHyperedge, hoverNode }) => {
     const { t } = useI18n();
     return (
-        <div className="shrink-0 w-72 h-full overflow-y-auto bg-white/95 backdrop-blur-sm border-l border-gray-200/50 p-3 shadow-xl">
-            <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
-                {t("detail")}
-            </div>
+        <>
             {hoverHyperedge && (
-                <div className="text-sm text-gray-700 space-y-3 border-b-2 border-primary-500 pb-6">
+                <div className="text-sm text-gray-700 space-y-3 border-b-2 border-primary-500 pb-4">
                     <div className="text-base font-semibold text-gray-900">
                         {t(hoverHyperedge.members?.length === 2 ? "edge" : "hyperedge")}
                     </div>
@@ -117,7 +115,7 @@ const DetailsPanel = ({ hoverHyperedge, hoverNode }) => {
                     <PropertyList item={hoverNode} />
                 </div>
             )}
-        </div>
+        </>
     );
 };
 

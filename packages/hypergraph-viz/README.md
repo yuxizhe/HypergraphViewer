@@ -29,6 +29,32 @@ import { HypergraphView } from 'hypergraph-viz/react';
 />
 ```
 
+### 多选、隐藏与样式
+
+```tsx
+import { filterHypergraph, hyperedgeColorsOf, hypergraphStats } from 'hypergraph-viz';
+
+const stats = hypergraphStats(graph);                          // 度数、超边大小分布、类型构成、连通分量、枢纽实体
+const visible = filterHypergraph(graph, { nodes: hiddenIds }); // 去掉隐藏元素，超边保留原 id
+const colors = hyperedgeColorsOf(graph);                       // 在完整数据上按 id 取色，隐藏后颜色不变
+
+<HypergraphView
+  ref={viewRef}                      // viewRef.current.hover({ nodes: [id] }) 临时高亮
+  data={visible}
+  hyperedgeColors={colors}
+  nodeColors={{ [id]: '#ff0000' }}   // 单个实体颜色，优先于类型颜色
+  contours contourBounds="key"       // 是否画轮廓；'key' 只圈节点，'render' 含标签
+  nodeSizeBy="degree"
+  layout={{ type: 'hypergraph', nodeSpacing: 50, preventLabelOverlap: true, useCenter: true }}
+  selection={{ nodes: [...], hyperedges: [...] }}
+  onSelectionChange={(selection, { additive, hit }) => ...}  // 挂载时传入即启用多选：点击单选，Shift 增删
+/>
+```
+
+`layout.type` 还可以是 `'force'`（改造前的力导 + 主超边聚类）、`'force-atlas2'`、`'circular'`。
+数据或布局相关选项变化时重新布局；只有颜色、轮廓、主题配色变化时只重绘，节点位置不变。
+对象类选项（`typeColors`、`layout`、`theme` 等）需由宿主保持引用稳定（`useMemo`）。
+
 ## 不用框架
 
 ```ts
@@ -36,6 +62,7 @@ import { createHypergraphView } from 'hypergraph-viz';
 const view = createHypergraphView(container, { data, mode: 'hyper', onHover, onSelect });
 view.update({ data: next });
 view.select(hyperedgeId);
+view.hover({ hyperedges: [hyperedgeId] }); // null 取消
 view.destroy();
 ```
 

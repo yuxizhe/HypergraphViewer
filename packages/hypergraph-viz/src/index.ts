@@ -1,10 +1,14 @@
 export { EDGE_SEPARATOR, fromKeyedEdges } from './adapters';
+export type { HypergraphStats } from './analysis';
+export { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats } from './analysis';
 export { KeyBoundsBubbleSets } from './bubble-sets-key';
-export { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, HoverBubbleSets } from './hover-bubble-sets';
+export { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, HoverBubbleSets, SUPPRESS_CONTOUR_UPDATE } from './hover-bubble-sets';
 export type { Hyperedge, HypergraphLayoutOptions } from './layout';
 export { HypergraphLayout } from './layout';
 export { HYPERGRAPH_LAYOUT, registerHypergraph } from './register';
-export type { HyperedgeItem, HypergraphData, HypergraphMode, HypergraphSpec, SpecOptions } from './spec';
+export type { BubbleLevel, Selection, SelectionStyles } from './selection';
+export { EMPTY_SELECTION, isEmptySelection, nextSelection, selectionStyles } from './selection';
+export type { HyperedgeItem, HypergraphData, HypergraphMode, HypergraphSpec, LayoutSettings, SpecOptions } from './spec';
 export { bubbleKeyOf, pairId, toG6Spec } from './spec';
 export type { BubbleState, HypergraphTheme } from './theme';
 export { DEFAULT_THEME, resolveTheme, typeColorsOf } from './theme';

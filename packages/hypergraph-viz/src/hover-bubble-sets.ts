@@ -6,7 +6,8 @@
  * - 布局进行中隐藏轮廓，布局结束后按节点新位置重画；
  * - 首次渲染完成前被销毁（切换数据、组件卸载）时不再因 shape 为空而抛异常；
  * - 配置更新（graph.setPlugins / updatePlugin，如点击高亮改透明度）后立即应用到已画好的轮廓，
- *   npm 版基类的 update 只合并配置、不重画。
+ *   npm 版基类的 update 只合并配置、不重画；
+ * - graph 上的 SUPPRESS_CONTOUR_UPDATE 计数大于 0 时（只改样式、状态），不因元素更新而重算轮廓。
  * 以新类型名 'hover-bubble-sets' 注册，不覆盖 G6 内置的 'bubble-sets'。
  */
 import type { BubbleSetsOptions } from '@antv/g6';
@@ -16,6 +17,8 @@ import { KeyBoundsBubbleSets } from './bubble-sets-key';
 
 export const HOVER_BUBBLE_SETS = 'hover-bubble-sets';
 export const BUBBLE_SETS_TARGET = 'bubble-sets';
+/** graph 上的计数字段：大于 0 时元素更新不触发轮廓重算 / counter on the graph: element updates skip contour recomputation while > 0 */
+export const SUPPRESS_CONTOUR_UPDATE = '__hypergraphSuppressContour';
 
 const SHAPE_EVENTS = [CommonEvent.POINTER_OVER, CommonEvent.POINTER_MOVE, CommonEvent.POINTER_LEAVE, CommonEvent.CLICK];
 
@@ -43,6 +46,13 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
       this.setContourVisible(!this.layouting);
     };
     graph.on(GraphEvent.AFTER_RENDER, self.drawBubbleSets);
+    // 基类每个元素更新都按该元素重算一次轮廓；只改颜色、状态时逐个重算很慢，且路径不变
+    graph.off(GraphEvent.AFTER_ELEMENT_UPDATE, self.updateBubbleSetsPath);
+    const baseUpdatePath = self.updateBubbleSetsPath;
+    self.updateBubbleSetsPath = (event: any) => {
+      if (!((graph as any)[SUPPRESS_CONTOUR_UPDATE] > 0)) baseUpdatePath(event);
+    };
+    graph.on(GraphEvent.AFTER_ELEMENT_UPDATE, self.updateBubbleSetsPath);
     graph.on(GraphEvent.BEFORE_LAYOUT, this.onBeforeLayout);
     graph.on(GraphEvent.AFTER_LAYOUT, this.onAfterLayout);
   }
@@ -67,10 +77,22 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
   };
 
   update(options: Partial<BubbleSetsOptions>) {
-    super.update(options);
     const self = this as any;
+    const prevMembers = this.options.members;
+    super.update(options);
+    // 成员变了（换数据、隐藏实体）：清掉按旧成员缓存的区域。否则基类在算新路径时要先移除旧成员，
+    // 对已删除的节点调用 graph.getElementType 会抛 "Unknown element type"
+    const members = this.options.members;
+    if (options.members && (members.length !== prevMembers.length || members.some((m, i) => m !== prevMembers[i]))) {
+      self.init();
+    }
     // 只更新样式（路径 d 不在 style 中，保持不变），不重算轮廓
     if (self.shape && !self.shape.destroyed) self.shape.update(self.parseOptions().style);
+  }
+
+  /** 按节点当前位置重算并重画轮廓（新加入的插件、轮廓范围变化后）/ recompute the contour from current node positions */
+  redraw() {
+    (this as any).drawBubbleSets();
   }
 
   private setContourVisible(visible: boolean) {
@@ -97,6 +119,7 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
     const self = this as any;
     const { graph } = this.context;
     graph.off(GraphEvent.AFTER_RENDER, self.drawBubbleSets);
+    graph.off(GraphEvent.AFTER_ELEMENT_UPDATE, self.updateBubbleSetsPath);
     graph.off(GraphEvent.BEFORE_LAYOUT, this.onBeforeLayout);
     graph.off(GraphEvent.AFTER_LAYOUT, this.onAfterLayout);
     this.unbindShapeEvents();

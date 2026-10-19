@@ -1,6 +1,6 @@
 {
   "name": "hypergraph-viz",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Hypergraph rendering on G6 v5: hypergraph layout, node-only bubble sets, hover and selection",
   "license": "MIT",
   "author": "yuxizhe",
@@ -23,16 +23,33 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./react": {
-      "types": "./dist/react.d.ts",
-      "import": "./dist/react.js",
-      "require": "./dist/react.cjs"
+      "import": {
+        "types": "./dist/react.d.ts",
+        "default": "./dist/react.js"
+      },
+      "require": {
+        "types": "./dist/react.d.cts",
+        "default": "./dist/react.cjs"
+      }
     },
     "./global": "./dist/hypergraph-viz.global.js"
+  },
+  "typesVersions": {
+    "*": {
+      "react": [
+        "./dist/react.d.ts"
+      ]
+    }
   },
   "files": [
     "dist"

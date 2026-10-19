@@ -7,7 +7,7 @@ import { HypergraphLayout as LegacyLayout } from './legacy/layouts/hypergraphLay
 import { processGraphData } from './legacy/dataProcessor.js';
 import { generateEntityTypeColors } from './legacy/constants.js';
 import { datas } from '../../../src/data.js';
-import { fromKeyedEdges, HypergraphLayout, toG6Spec, typeColorsOf } from '../src';
+import { DEFAULT_THEME, fromKeyedEdges, HypergraphLayout, toG6Spec, typeColorsOf } from '../src';
 
 const centers = Object.keys(datas.graphs).slice(0, 6);
 const typeColors = generateEntityTypeColors(datas.vertices);
@@ -22,7 +22,8 @@ describe.each(centers)('vertex %s', (center) => {
   const graph = datas.graphs[center];
 
   it('type colors match generateEntityTypeColors', () => {
-    expect(typeColorsOf(datas.vertices)).toEqual(typeColors);
+    // 调色板已扩到 12 色，按原 6 色调色板对照
+    expect(typeColorsOf(datas.vertices, 'entity_type', DEFAULT_THEME.typePalette.slice(0, 6))).toEqual(typeColors);
   });
 
   it.each(['hyper', 'graph'] as const)('%s mode matches processGraphData', (mode) => {

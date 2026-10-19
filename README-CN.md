@@ -1,6 +1,8 @@
 # Hypergraph Viewer - React Version (中文版)
 
-这是一个基于 JS 构建的超图可视化工具，
+这是一个基于 JS 构建的超图可视化工具。
+
+<img width="100%" alt="Hypergraph Viewer 界面：数据库面板、超图画布与当前子图面板" src="docs/images/screenshot-cn.png" />
 
 ## 功能特性
 
@@ -12,6 +14,11 @@
   - 鼠标悬停显示详细信息
   - 可拖拽的图形元素
   - 缩放和平移功能
+- 📚 **示例数据集**（HIF 格式，在数据源卡片中切换；网址加 `?dataset=<id>` 可直接打开某一套）:
+  - 神经学（医学）、英伟达超大规模云（金融）、三国演义、西游记、权力的游戏第一季
+- 🧭 **两侧面板**（可展开收起的卡片）:
+  - 左侧：数据源、数据库统计、实体与超边列表（支持类型筛选）
+  - 右侧：当前子图统计、实体 / 超边表（选择、显隐、改色）、渲染设置（布局、轮廓、节点大小）
 - 📝 **详细信息面板**: 实时显示超边和节点的详细属性
 - 🎯 **分页浏览**: 高效处理大量数据集
 
@@ -55,7 +62,7 @@ npm run dev
 src/
 ├── components/
 │   └── HypergraphViewer.jsx    # 主要的超图可视化组件
-├── data.js                     # 数据文件
+├── datasets.js                 # 示例数据集列表（文件在 public/datasets/，由 scripts/build_datasets.py 生成）
 ├── index.css                   # 全局样式
 ├── App.jsx                     # 应用根组件
 └── main.jsx                    # 应用入口点

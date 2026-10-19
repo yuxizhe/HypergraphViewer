@@ -5,6 +5,7 @@ export const EXCLUDED_KEYS = new Set([
     "data",
     "weight",
     "source_id",
+    "cluster", // 布局用的主超边，不是数据属性
 ]);
 
 // 悬停卡片中超边优先显示的属性、有 type 时不显示的属性（类型看 type），以及最多显示的属性个数；侧边栏显示全部属性
