@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatDescription } from '../utils.js';
 import DataSourceSelector from './DataSourceSelector.jsx';
+import { useI18n } from '../i18n.jsx';
 
 const Sidebar = ({
     databaseInfo,
@@ -18,6 +19,7 @@ const Sidebar = ({
     dataSourceLoading,
     dataSourceError
 }) => {
+    const { t } = useI18n();
     return (
         <div className="w-80 h-screen p-6 overflow-hidden bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl shrink-0 flex flex-col">
 
@@ -44,18 +46,18 @@ const Sidebar = ({
             <div className='flex-1 overflow-scroll hide-scrollbar'>
 
                 <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
-                    Database Information
+                    {t("databaseInfo")}
                 </div>
                 <div className="p-2 rounded-xl mb-6 text-sm border">
                     <div className="flex justify-between items-center mb-2">
-                        <span className="font-semibold text-gray-700">Vertices:</span>
+                        <span className="font-semibold text-gray-700">{t("verticesLabel")}</span>
                         <span className="font-bold text-primary-600">
                             {databaseInfo.vertices}
                         </span>
                     </div>
                     <div className="flex justify-between items-center">
                         <span className="font-semibold text-gray-700">
-                            Hyperedges:
+                            {t("hyperedgesLabel")}
                         </span>
                         <span className="font-bold text-primary-600">
                             {databaseInfo.edges}
@@ -64,7 +66,7 @@ const Sidebar = ({
                 </div>
 
                 <div className="text-lg font-bold text-gray-800 mb-3 pb-2 border-b-2 border-primary-500">
-                    Search & Vertex List
+                    {t("searchList")}
                 </div>
 
                 {/* Search and Sort */}
@@ -72,7 +74,7 @@ const Sidebar = ({
                     <div className="relative mb-2">
                         <input
                             type="text"
-                            placeholder="Search vertex ID, type or description..."
+                            placeholder={t("searchPlaceholder")}
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="w-full px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200"
@@ -115,7 +117,7 @@ const Sidebar = ({
                     </div>
 
                     <div className="mt-2 text-sm text-gray-600">
-                        Found {pagination.total} results
+                        {t("found", { n: pagination.total })}
                     </div>
                 </div>
 
@@ -123,11 +125,11 @@ const Sidebar = ({
                 <div className="flex-1  border border-gray-200 rounded-xl bg-white shadow-inner">
                     {loadingVertices ? (
                         <div className="p-4 text-center text-gray-500">
-                            Loading vertices...
+                            {t("loadingVertices")}
                         </div>
                     ) : vertices.length === 0 ? (
                         <div className="p-4 text-center text-gray-500">
-                            No matching vertices found
+                            {t("noMatch")}
                         </div>
                     ) : (
                         vertices.map((vertex) => {
@@ -148,14 +150,14 @@ const Sidebar = ({
                                     <div className="text-sm text-gray-600 flex gap-2 items-center">
                                         <div className="flex items-center">
                                             <span className="font-medium">
-                                                {vertex.entity_type ? "Type" : "ID"}:
+                                                {vertex.entity_type ? t("typeLabel") : t("idLabel")}
                                             </span>
                                             <span className="ml-2 px-2 py-1 bg-gray-100 rounded text-xs">
                                                 {vertex.entity_type || vertex.id}
                                             </span>
                                         </div>
                                         <div className="flex items-center">
-                                            <span className="font-medium">Degree:</span>
+                                            <span className="font-medium">{t("degreeLabel")}</span>
                                             <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-semibold">
                                                 {vertex.degree}
                                             </span>
@@ -180,7 +182,7 @@ const Sidebar = ({
                             disabled={pagination.page === 1}
                             className="px-3 py-1 bg-primary-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-primary-600"
                         >
-                            Previous
+                            {t("prev")}
                         </button>
                         <span className="text-gray-600">
                             {pagination.page} / {pagination.total_pages}
@@ -190,7 +192,7 @@ const Sidebar = ({
                             disabled={pagination.page === pagination.total_pages}
                             className="px-3 py-1 bg-primary-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-primary-600"
                         >
-                            Next
+                            {t("next")}
                         </button>
                     </div>
                 )}

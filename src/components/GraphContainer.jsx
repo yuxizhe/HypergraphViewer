@@ -1,106 +1,82 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { HypergraphView } from 'hypergraph-viz/react';
+import HoverTip from './HoverTip.jsx';
+import { HYPEREDGE_FIELD_LIMIT, HYPEREDGE_PRIORITY, HYPEREDGE_TIP_EXCLUDED } from '../constants.js';
+
+// 悬停目标 → 悬停卡片内容：顶点 → 顶点属性；连线（2 个顶点的超边）/ 超边轮廓 → 超边属性
+const tipOf = (hit) => {
+    if (hit.kind === "node") return { title: "node", item: hit.item };
+    return {
+        title: hit.kind,
+        item: hit.item,
+        priority: HYPEREDGE_PRIORITY,
+        // 没有 type 的超边（如 Hyper-RAG 原版抽取的图）仍显示 keywords
+        exclude: hit.item.type ? HYPEREDGE_TIP_EXCLUDED : [],
+        limit: HYPEREDGE_FIELD_LIMIT,
+    };
+};
 
 const GraphContainer = ({
-    graphDataFormatted,
+    hypergraph,
     visualizationMode,
+    selectedVertex,
+    entityTypeColors,
     setHoverHyperedge,
     setHoverNode
 }) => {
-    const containerRef = useRef(null);
-    const graphRef = useRef(null);
+    const [tip, setTip] = useState(null);
+    // 选中期间侧边栏固定显示该超边，不随悬停变化
+    const selectedRef = useRef(null);
 
-    // Initialize graph
+    // 换数据或模式时清空悬停与选中（视图会重新布局并取消选中）
     useEffect(() => {
-        if (!graphDataFormatted || !containerRef.current || !window.G6) return;
+        setHoverHyperedge(null);
+        setTip(null);
+        selectedRef.current = null;
+    }, [hypergraph, visualizationMode, setHoverHyperedge]);
 
-        // Destroy previous graph instance and clear canvas
-        if (graphRef.current && !graphRef.current.destroyed) {
-            graphRef.current.clear();
-            if (containerRef.current) {
-                containerRef.current.innerHTML = "";
-            }
+    const onSelect = (hit) => {
+        selectedRef.current = hit;
+        if (hit) setHoverHyperedge(hit.item);
+    };
+
+    const onHover = (hit) => {
+        if (hit?.kind === "hyperedge" && !selectedRef.current) {
+            setHoverHyperedge((prev) => (prev?.id === hit.item.id ? prev : hit.item));
         }
-
-        const graph = new window.G6.Graph({
-            container: containerRef.current,
-            width: containerRef.current.offsetWidth,
-            height: containerRef.current.offsetHeight || 800,
-            data: graphDataFormatted.data,
-            behaviors: ["zoom-canvas", "drag-canvas", "drag-element"],
-            autoFit: "center",
-            animate: false,
-            node: graphDataFormatted.node,
-            edge: graphDataFormatted.edge,
-            layout: graphDataFormatted.layout,
-            plugins: graphDataFormatted.plugins,
-        });
-
-        graphRef.current = graph;
-        graphRef.current.render();
-
-        graph.on("pointermove", (e) => {
-            if (e.targetType === "bubble-sets") {
-                const target = e.target.options;
-                const newHyperedge = {
-                    ...target.edge,
-                    members: Array.isArray(target.members) ? target.members : [],
-                };
-                setHoverHyperedge((prev) => {
-                    if (
-                        !prev ||
-                        prev.keywords !== newHyperedge.keywords ||
-                        prev.summary !== newHyperedge.summary ||
-                        prev.weight !== newHyperedge.weight ||
-                        JSON.stringify(prev.members) !==
-                        JSON.stringify(newHyperedge.members)
-                    ) {
-                        return newHyperedge;
-                    }
-                    return prev;
-                });
-            }
-            if (e.targetType === "node") {
-                const target = graphDataFormatted.data.nodes.find(
-                    (node) => node.id === e.target.id
-                );
-                setHoverNode((prev) => {
-                    if (!prev || prev.id !== target?.id) {
-                        return target;
-                    }
-                    return prev;
-                });
-            }
-        });
-
-        // Add window resize listener
-        const handleResize = () => {
-            if (graphRef.current && containerRef.current) {
-                graphRef.current.setSize(
-                    containerRef.current.offsetWidth,
-                    containerRef.current.offsetHeight
-                );
-            }
-        };
-
-        window.addEventListener("resize", handleResize);
-
-        return () => {
-            window.removeEventListener("resize", handleResize);
-            if (graphRef.current && !graphRef.current.destroyed) {
-                graphRef.current.clear();
-            }
-            if (containerRef.current) {
-                containerRef.current.innerHTML = "";
-            }
-            setHoverHyperedge(null);
-        };
-    }, [graphDataFormatted, visualizationMode, setHoverHyperedge, setHoverNode]);
+        if (hit?.kind === "node") {
+            setHoverNode((prev) => (prev?.id === hit.item.id ? prev : hit.item));
+        }
+        // 侧边栏保留最后悬停的超边 / 顶点；悬停卡片只在指针位于元素上时显示
+        setTip(hit ? { ...tipOf(hit), x: hit.client.x, y: hit.client.y } : null);
+    };
 
     return (
-        <div
-            ref={containerRef}
-            className="w-full rounded-xl h-full"
-        />
+        <>
+            {hypergraph && (
+                <HypergraphView
+                    className="w-full rounded-xl h-full"
+                    data={hypergraph}
+                    mode={visualizationMode}
+                    centerNode={selectedVertex}
+                    typeColors={entityTypeColors}
+                    fallbackHeight={800}
+                    onHover={onHover}
+                    onSelect={onSelect}
+                />
+            )}
+            {tip && (
+                <HoverTip
+                    title={tip.title}
+                    item={tip.item}
+                    priority={tip.priority}
+                    exclude={tip.exclude}
+                    limit={tip.limit}
+                    x={tip.x}
+                    y={tip.y}
+                />
+            )}
+        </>
     );
 };
 
