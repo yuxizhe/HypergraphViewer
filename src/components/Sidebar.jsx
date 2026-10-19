@@ -4,6 +4,7 @@ import Section from './panel/Section.jsx';
 import StatsTab from './panel/StatsTab.jsx';
 import TypeChips from './panel/TypeChips.jsx';
 import { useI18n } from '../i18n.jsx';
+import { DATASETS } from '../datasets.js';
 
 const ROW = "grid grid-cols-[58px_minmax(0,1fr)] items-center gap-2";
 
@@ -67,7 +68,7 @@ const Sidebar = ({
     dataSourceLoading,
     dataSourceError,
 }) => {
-    const { t } = useI18n();
+    const { t, lang } = useI18n();
     const [open, setOpen] = useState({ source: true, stats: true, nodes: true, hyperedges: true });
     const [hyperedgeTypes, setHyperedgeTypes] = useState([]);
     const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
@@ -83,12 +84,11 @@ const Sidebar = ({
 
     const sourceLabel =
         currentDataSource.type === "static"
-            ? t("useDefaultData")
+            ? DATASETS.find((d) => d.id === currentDataSource.dataset)?.name[lang]
             : currentDataSource.type === "remote"
                 ? currentDataSource.url
                 : currentDataSource.file?.name;
-    // 超边类型：HIF 解析器给没有类型的超边写的 "hyperedge" 不算类型
-    const typeOfHyperedge = (he) => (he.type && he.type !== "hyperedge" ? he.type : null);
+    const typeOfHyperedge = (he) => he.type || null;
     const hyperedgeTypeChips = useMemo(() => {
         const count = new Map();
         hyperedges.forEach((he) => {
@@ -274,7 +274,7 @@ const Sidebar = ({
                                 >
                                     <Bar value={he.members.length} max={maxSize} />
                                     <span className="flex items-center gap-1 min-w-0">
-                                        {he.type && he.type !== "hyperedge" && (
+                                        {he.type && (
                                             <span className="shrink-0 px-1 rounded bg-gray-100 text-gray-600 text-[10px]">{he.type}</span>
                                         )}
                                         <span className="truncate text-gray-800">{name}</span>

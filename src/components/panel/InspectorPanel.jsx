@@ -76,7 +76,6 @@ const InspectorPanel = ({
                 color: colors.nodeColorOf(id),
                 colorOverridden: colors.nodeOverridden(id),
                 hidden: hiddenNodes.has(id),
-                hideDisabled: id === centerNode,
                 badges,
                 title: v.description ? `${id}\n${v.description}` : id,
                 search: `${id} ${type ?? ""} ${v.description ?? ""}`,
@@ -182,7 +181,7 @@ const InspectorPanel = ({
 
     const hideSelected = () => {
         setHidden((h) => ({
-            nodes: [...new Set([...h.nodes, ...selection.nodes.filter((id) => id !== centerNode)])],
+            nodes: [...new Set([...h.nodes, ...selection.nodes])],
             hyperedges: [...new Set([...h.hyperedges, ...selection.hyperedges])],
         }));
     };
@@ -191,7 +190,6 @@ const InspectorPanel = ({
     const showOnlySelected = () => {
         const keep = new Set(selection.nodes);
         selection.hyperedges.forEach((id) => stats.members.get(id)?.forEach((m) => keep.add(m)));
-        if (centerNode !== undefined) keep.add(centerNode);
         setHidden({
             nodes: Object.keys(hypergraph.vertices).filter((id) => !keep.has(id)),
             hyperedges: selection.hyperedges.length
@@ -230,7 +228,10 @@ const InspectorPanel = ({
                                 centerNode={centerNode}
                                 hidden={hidden}
                                 onPick={pick}
-                                onHideHubs={(ids) => setHidden((h) => ({ ...h, nodes: [...new Set([...h.nodes, ...ids])] }))}
+                                onToggleHubs={(ids, hide) => setHidden((h) => ({
+                                    ...h,
+                                    nodes: hide ? [...new Set([...h.nodes, ...ids])] : h.nodes.filter((id) => !ids.includes(id)),
+                                }))}
                             />
                         </Section>
                         <Section

@@ -13,7 +13,7 @@ const EyeIcon = ({ off }) => (
 const GRID = "grid grid-cols-[20px_64px_minmax(0,1fr)_20px_24px] items-center gap-1.5";
 
 // 实体 / 超边共用的表格：类型筛选（兼作图例与类型取色）、搜索、排序、勾选、显隐、颜色。
-// rows: [{ id, name, value, type, color, colorOverridden, hidden, dropped, note, badges, hideDisabled, search }]；color 为 undefined 时不显示色块
+// rows: [{ id, name, value, type, color, colorOverridden, hidden, dropped, note, badges, search }]；color 为 undefined 时不显示色块
 const ElementTable = ({
     rows,
     valueLabel,
@@ -189,10 +189,9 @@ const ElementTable = ({
                                 title={t("elementColor")}
                             />}
                             <button
-                                className={`flex justify-center ${r.hideDisabled ? "text-gray-200 cursor-not-allowed" : r.hidden ? "text-gray-400 hover:text-gray-700" : "text-gray-600 hover:text-primary-600"}`}
-                                disabled={r.hideDisabled}
+                                className={`flex justify-center ${r.hidden ? "text-gray-400 hover:text-gray-700" : "text-gray-600 hover:text-primary-600"}`}
                                 onClick={() => onToggleHidden(r.id)}
-                                title={r.hideDisabled ? t("centerCannotHide") : t(r.hidden ? "show" : "hide")}
+                                title={t(r.hidden ? "show" : "hide")}
                             >
                                 <EyeIcon off={r.hidden} />
                             </button>

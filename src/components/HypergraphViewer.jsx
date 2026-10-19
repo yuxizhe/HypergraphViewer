@@ -9,6 +9,7 @@ import GraphContainer from './GraphContainer.jsx';
 import InspectorPanel from './panel/InspectorPanel.jsx';
 import { LANGUAGES, useI18n } from '../i18n.jsx';
 import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from '../viewSettings.js';
+import { DATASETS, initialDataset, rememberDataset } from '../datasets.js';
 
 const EMPTY_HIDDEN = { nodes: [], hyperedges: [] };
 
@@ -52,7 +53,7 @@ export default function HypergraphViewer() {
     const [visualizationMode, setVisualizationMode] = useState("hyper");
     const [hoverHyperedge, setHoverHyperedge] = useState(null);
     const [hoverNode, setHoverNode] = useState(null);
-    const [currentDataSource, setCurrentDataSource] = useState({ type: 'static' });
+    const [currentDataSource, setCurrentDataSource] = useState(() => ({ type: 'static', dataset: initialDataset() }));
     const [dataSourceLoading, setDataSourceLoading] = useState(false);
     const [dataSourceError, setDataSourceError] = useState("");
 
@@ -80,6 +81,7 @@ export default function HypergraphViewer() {
 
             if (result.success) {
                 setCurrentDataSource(newSource);
+                rememberDataset(newSource.type === 'static' ? newSource.dataset : null);
 
                 // Refresh all data after successful data source change
                 setDataVersion((v) => v + 1);
@@ -95,6 +97,9 @@ export default function HypergraphViewer() {
 
                 // Reload vertices with current search/sort settings
                 await loadVertices(1, searchTerm, sortBy, sortOrder);
+                // 示例数据集可指定默认中心（loadVertices 选中的是度数最高的实体）
+                const center = newSource.type === 'static' && DATASETS.find((d) => d.id === newSource.dataset)?.center;
+                if (center && result.data.graphs[center]) setSelectedVertex(center);
             } else {
                 setDataSourceError(result.error);
             }
@@ -106,9 +111,10 @@ export default function HypergraphViewer() {
         }
     };
 
-    // Load database info
+    // 首次挂载时下载默认（或网址指定的）示例数据集
     useEffect(() => {
-        fetchLoadedHypergraph().then(setLoadedHypergraph).catch(console.error);
+        handleDataSourceChange(currentDataSource);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Load vertices list
@@ -127,8 +133,10 @@ export default function HypergraphViewer() {
             setPagination(result.pagination);
 
             // If no vertex selected and data exists, select the first one
+            // （当前选中的实体仍在数据中时保留：翻页、搜索、排序不换中心，示例数据集指定的中心也不被覆盖）
             if (result.data.length > 0) {
-                setSelectedVertex(result.data[0].id);
+                const centers = centerSizes();
+                setSelectedVertex((cur) => (cur && centers.has(cur) ? cur : result.data[0].id));
             }
         } catch (err) {
             console.error("Failed to load vertices:", err);
@@ -136,11 +144,6 @@ export default function HypergraphViewer() {
             setLoadingVertices(false);
         }
     };
-
-    // Initial load of vertices
-    useEffect(() => {
-        loadVertices(1, "", sortBy, sortOrder);
-    }, []);
 
     // Search debounce
     useEffect(() => {

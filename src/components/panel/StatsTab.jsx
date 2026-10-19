@@ -16,7 +16,7 @@ const StatsTab = ({
     centerNode,
     hidden = NO_HIDDEN,
     onPick,
-    onHideHubs,
+    onToggleHubs,
     onTypeClick,
     showHubs = true,
 }) => {
@@ -31,9 +31,10 @@ const StatsTab = ({
         });
         return out;
     }, [stats, typeOf]);
-    const hubs = stats.hubs.filter((id) => id !== centerNode);
+    // 中心实体也算枢纽（邻域子图中它出现在每条超边里），可以一并隐藏，看去掉中心后的结构
+    const hubs = stats.hubs;
     const total = stats.members.size;
-    const hiddenHubs = hubs.filter((id) => hidden.nodes.includes(id));
+    const hubsHidden = hubs.every((id) => hidden.nodes.includes(id));
 
     return (
         <div className="space-y-2.5 text-sm">
@@ -90,28 +91,22 @@ const StatsTab = ({
                 <div className="rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
                     <div className="flex items-center gap-2">
                         <span className="font-semibold mr-auto">{t("hubWarning", { n: hubs.length })}</span>
-                        {onHideHubs && (
-                            <>
-                                <button
-                                    className="px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50"
-                                    disabled={hiddenHubs.length === hubs.length}
-                                    onClick={() => onHideHubs(hubs)}
-                                >
-                                    {t("hideAllHubs")}
-                                </button>
-                                <button
-                                    className="px-2 py-0.5 rounded border border-amber-400 hover:bg-amber-100"
-                                    onClick={() => onPick({ nodes: hubs.filter((id) => !hidden.nodes.includes(id)), hyperedges: [] }, "nodes")}
-                                >
-                                    {t("selectOnly")}
-                                </button>
-                            </>
+                        {/* 全部隐藏；已全部隐藏时再点恢复显示 */}
+                        {onToggleHubs && (
+                            <button
+                                className={hubsHidden
+                                    ? "px-2 py-0.5 rounded border border-amber-400 hover:bg-amber-100"
+                                    : "px-2 py-0.5 rounded bg-amber-500 text-white hover:bg-amber-600"}
+                                onClick={() => onToggleHubs(hubs, !hubsHidden)}
+                            >
+                                {t(hubsHidden ? "showAllHubs" : "hideAllHubs")}
+                            </button>
                         )}
                     </div>
                     <div className="mt-0.5 flex flex-wrap gap-x-3">
                         {hubs.map((id) => (
                             <span key={id} className={hidden.nodes.includes(id) ? "line-through text-amber-600" : ""}>
-                                {id} <span className="tabular-nums">{stats.degree.get(id)}/{total}</span>
+                                {id}{id === centerNode && ` (${t("badgeCenter")})`} <span className="tabular-nums">{stats.degree.get(id)}/{total}</span>
                             </span>
                         ))}
                     </div>

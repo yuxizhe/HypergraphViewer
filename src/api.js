@@ -1,11 +1,14 @@
-import { datas } from './data.js';
 import { loadHIFFromURL, loadHIFFromFile, validateHIFData } from './hifParser.js';
+import { datasetUrl, DEFAULT_DATASET } from './datasets.js';
+
+const EMPTY_DATA = { database: { name: '', vertices: 0, edges: 0 }, vertices: [], graphs: {} };
 
 // Data source manager
 class DataSourceManager {
     constructor() {
-        this.currentData = datas;
-        this.currentSource = { type: 'static' };
+        // 示例数据集在页面加载后再下载（HypergraphViewer 首次挂载时切换到默认数据集）
+        this.currentData = EMPTY_DATA;
+        this.currentSource = { type: 'static', dataset: DEFAULT_DATASET };
     }
 
     async setDataSource(source) {
@@ -14,7 +17,7 @@ class DataSourceManager {
 
             switch (source.type) {
                 case 'static':
-                    newData = datas;
+                    newData = await loadHIFFromURL(datasetUrl(source.dataset));
                     break;
 
                 case 'remote':
@@ -75,9 +78,10 @@ export const fetchVertices = async (
     const data = dataSourceManager.getCurrentData();
     const toLower = (v) => (v ?? "").toString().toLowerCase();
     // graphs 转为数组，id 是 key
+    const vertexById = new Map(data.vertices.map(v => [v.id, v]));
     let list = Object.keys(data.graphs).map(key => ({
         id: key,
-        ...data.vertices.find(v => v.id === key),
+        ...vertexById.get(key),
         ...data.graphs[key],
         degree: Object.keys(data.graphs[key].vertices).length,
     }));

@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { getUrlParam, setUrlParam } from './urlParams.js';
 
 // 中英文界面文字；与 Hypergraph-DB 查看器 / 管理后台用同一套术语（vertex → 实体，hyperedge → 超边）。
 // 属性名（description、keywords 等）来自数据，不翻译
@@ -6,7 +7,7 @@ const MESSAGES = {
     en: {
         pageTitle: "Hypergraph Visualization",
         dataSource: "Data Source",
-        useDefaultData: "Use Default Data", remoteHif: "Remote HIF URL", uploadHif: "Upload HIF File",
+        useDefaultData: "Sample Datasets", remoteHif: "Remote HIF URL", uploadHif: "Upload HIF File",
         hifUrlPlaceholder: "Enter HIF file URL", load: "Load", loading: "Loading...",
         databaseInfo: "Database Information",
         verticesLabel: "Vertices:", hyperedgesLabel: "Hyperedges:", edgesLabel: "Edges:",
@@ -30,11 +31,11 @@ const MESSAGES = {
         typeComposition: "Vertex types", untyped: "Untyped",
         degreeDistribution: "Vertex degree", sizeDistribution: "Hyperedge size",
         histogramHint: "Click a bar or color segment to select those elements",
-        hubWarning: "{n} hubs (in ≥50% of hyperedges)", hideAllHubs: "Hide all", selectOnly: "Select",
+        hubWarning: "{n} hubs (in ≥50% of hyperedges)", hideAllHubs: "Hide all", showAllHubs: "Show all",
         degreeCol: "Degree", sizeCol: "Size", nameCol: "Name", all: "All",
         filterPlaceholder: "Filter...", selectAllShown: "Select all shown", noRows: "No matching rows",
         typeColor: "Type color", elementColor: "Color",
-        show: "Show", hide: "Hide", centerCannotHide: "The center vertex cannot be hidden",
+        show: "Show", hide: "Hide",
         badgeCenter: "center", badgeHub: "hub",
         noteMembersHidden: "members hidden", noteNotDrawnInGraph: "not drawn in graph mode",
         selectedCount: "Selected: {n} vertices, {m} hyperedges", showOnlySelected: "Show only", clearSelection: "Clear",
@@ -56,7 +57,7 @@ const MESSAGES = {
     zh: {
         pageTitle: "超图可视化",
         dataSource: "数据源",
-        useDefaultData: "使用默认数据", remoteHif: "远程 HIF 地址", uploadHif: "上传 HIF 文件",
+        useDefaultData: "示例数据集", remoteHif: "远程 HIF 地址", uploadHif: "上传 HIF 文件",
         hifUrlPlaceholder: "输入 HIF 文件地址", load: "加载", loading: "加载中...",
         databaseInfo: "数据库信息",
         verticesLabel: "实体：", hyperedgesLabel: "超边：", edgesLabel: "边：",
@@ -80,11 +81,11 @@ const MESSAGES = {
         typeComposition: "实体类型构成", untyped: "未分类",
         degreeDistribution: "实体度数分布", sizeDistribution: "超边大小分布",
         histogramHint: "点柱子或色段即选中对应元素",
-        hubWarning: "{n} 个枢纽（出现在 ≥50% 超边中）", hideAllHubs: "全部隐藏", selectOnly: "只选中",
+        hubWarning: "{n} 个枢纽（出现在 ≥50% 超边中）", hideAllHubs: "全部隐藏", showAllHubs: "全部显示",
         degreeCol: "度数", sizeCol: "大小", nameCol: "名称", all: "全部",
         filterPlaceholder: "表内筛选...", selectAllShown: "全选当前列表", noRows: "没有匹配的行",
         typeColor: "类型颜色", elementColor: "颜色",
-        show: "显示", hide: "隐藏", centerCannotHide: "中心实体不能隐藏",
+        show: "显示", hide: "隐藏",
         badgeCenter: "中心", badgeHub: "枢纽",
         noteMembersHidden: "成员已隐藏", noteNotDrawnInGraph: "图模式不绘制",
         selectedCount: "已选 实体 {n} · 超边 {m}", showOnlySelected: "只看所选", clearSelection: "清除",
@@ -106,7 +107,10 @@ const MESSAGES = {
 };
 const LANG_KEY = "hypergraph-viewer-lang";
 
+// 优先级：网址 ?lang=（en / zh）> 上次的选择 > 浏览器语言
 const detectLang = () => {
+    const fromUrl = getUrlParam("lang");
+    if (fromUrl in MESSAGES) return fromUrl;
     try {
         const saved = localStorage.getItem(LANG_KEY);
         if (saved in MESSAGES) return saved;
@@ -129,6 +133,7 @@ export const I18nProvider = ({ children }) => {
     useEffect(() => {
         document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
         document.title = MESSAGES[lang].pageTitle;
+        setUrlParam("lang", lang);
         try {
             localStorage.setItem(LANG_KEY, lang);
         } catch {
