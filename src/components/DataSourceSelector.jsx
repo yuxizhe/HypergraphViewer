@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useI18n } from '../i18n.jsx';
+import { useI18n } from 'hypergraph-viz/explorer';
 import { DATASETS, DEFAULT_DATASET } from '../datasets.js';
 
 // hideTitle：放进可收起卡片时由卡片显示标题

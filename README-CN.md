@@ -61,10 +61,16 @@ npm run dev
 ## 项目结构
 
 ```
-src/
+packages/hypergraph-viz/        # npm 包
+├── src/                        # 布局、轮廓、视图；react.tsx 为 <HypergraphView>
+│   ├── explorer/               # hypergraph-viz/explorer：<HypergraphExplorer>、左右面板、数据源、HIF 与 .hgdb 解析
+│   └── admin/                  # hypergraph-viz/admin：<HypergraphAdmin> 管理后台（Hypergraph-DB 的 /admin）
+src/                            # 本应用：<HypergraphExplorer> 加数据源选择
 ├── components/
-│   └── HypergraphViewer.jsx    # 主要的超图可视化组件
+│   └── DataSourceSelector.jsx  # 示例数据集、远程 .hgdb / HIF、上传文件
+├── api.js                      # 载入所选数据源
 ├── datasets.js                 # 示例数据集列表（文件在 public/datasets/，由 scripts/build_datasets.py 生成）
+├── i18n.js                     # 本应用的文字；语言记在网址与 localStorage
 ├── index.css                   # 全局样式
 ├── App.jsx                     # 应用根组件
 └── main.jsx                    # 应用入口点

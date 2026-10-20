@@ -1,5 +1,5 @@
 import React from 'react';
-import { useI18n } from '../../i18n.jsx';
+import { useI18n } from '../i18n.jsx';
 
 // 类型筛选按钮（多选），横向一行可滚动；chips: [{ type, label, count, color }]
 const TypeChips = ({ chips, selected, onToggle, onClear }) => {

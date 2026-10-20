@@ -1,7 +1,7 @@
 {
   "name": "hypergraph-viz",
-  "version": "0.1.1",
-  "description": "Hypergraph rendering on G6 v5: hypergraph layout, node-only bubble sets, hover and selection",
+  "version": "0.2.0",
+  "description": "Hypergraph rendering on G6 v5: hypergraph layout, node-only bubble sets, hover and selection, plus an explorer UI with database and inspector panels and an admin console",
   "license": "MIT",
   "author": "yuxizhe",
   "repository": {
@@ -17,7 +17,9 @@
     "visualization"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "*.css"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -42,12 +44,39 @@
         "default": "./dist/react.cjs"
       }
     },
-    "./global": "./dist/hypergraph-viz.global.js"
+    "./explorer": {
+      "import": {
+        "types": "./dist/explorer.d.ts",
+        "default": "./dist/explorer.js"
+      },
+      "require": {
+        "types": "./dist/explorer.d.cts",
+        "default": "./dist/explorer.cjs"
+      }
+    },
+    "./admin": {
+      "import": {
+        "types": "./dist/admin.d.ts",
+        "default": "./dist/admin.js"
+      },
+      "require": {
+        "types": "./dist/admin.d.cts",
+        "default": "./dist/admin.cjs"
+      }
+    },
+    "./global": "./dist/hypergraph-viz.global.js",
+    "./style.css": "./dist/style.css"
   },
   "typesVersions": {
     "*": {
       "react": [
         "./dist/react.d.ts"
+      ],
+      "explorer": [
+        "./dist/explorer.d.ts"
+      ],
+      "admin": [
+        "./dist/admin.d.ts"
       ]
     }
   },
@@ -55,26 +84,32 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node scripts/build-css.mjs",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "npm run build",
-    "sync:hypergraph-db": "node scripts/copy-global.mjs ../../../Hypergraph-DB/hyperdb/templates"
+    "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
     "@antv/g6": ">=5.0.49 <5.1.0",
-    "react": ">=18"
+    "react": ">=18",
+    "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
     "react": {
+      "optional": true
+    },
+    "react-dom": {
       "optional": true
     }
   },
   "devDependencies": {
     "@antv/g6": "5.0.49",
+    "@tailwindcss/postcss": "^4.1.16",
     "@types/react": "^19.1.16",
+    "postcss": "^8.5.6",
     "react": "^19.1.1",
+    "tailwindcss": "^4.1.16",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import MetricTag from './MetricTag.jsx';
 import MiniHistogram, { binsOf } from './MiniHistogram.jsx';
-import { useI18n } from '../../i18n.jsx';
+import { useI18n } from '../i18n.jsx';
 
 const NO_HIDDEN = { nodes: [], hyperedges: [] };
 

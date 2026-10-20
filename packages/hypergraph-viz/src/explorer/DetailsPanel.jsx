@@ -1,6 +1,6 @@
 import React from 'react';
-import { EXCLUDED_KEYS } from '../constants.js';
-import { useI18n } from '../i18n.jsx';
+import { EXCLUDED_KEYS } from './constants.js';
+import { useI18n } from './i18n.jsx';
 
 const PropertyRow = ({ name, value }) => {
     // Special handling for keywords

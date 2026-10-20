@@ -1,5 +1,5 @@
 import React from 'react';
-import { useI18n } from '../../i18n.jsx';
+import { useI18n } from '../i18n.jsx';
 
 const Tag = ({ relayout }) => {
     const { t } = useI18n();

@@ -1,14 +1,10 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
-import { getUrlParam, setUrlParam } from './urlParams.js';
+import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 
 // 中英文界面文字；与 Hypergraph-DB 查看器 / 管理后台用同一套术语（vertex → 实体，hyperedge → 超边）。
 // 属性名（description、keywords 等）来自数据，不翻译
-const MESSAGES = {
+// eslint-disable-next-line react-refresh/only-export-components
+export const MESSAGES = {
     en: {
-        pageTitle: "Hypergraph Visualization",
-        dataSource: "Data Source",
-        useDefaultData: "Sample Datasets", remoteHif: "Remote .hgdb / HIF URL", uploadHif: "Upload .hgdb / HIF File",
-        hifUrlPlaceholder: "Enter .hgdb / HIF file URL", load: "Load", loading: "Loading...",
         databaseInfo: "Database Information",
         verticesLabel: "Vertices:", hyperedgesLabel: "Hyperedges:", edgesLabel: "Edges:",
         searchList: "Search & Vertex List",
@@ -40,7 +36,7 @@ const MESSAGES = {
         noteMembersHidden: "members hidden", noteNotDrawnInGraph: "not drawn in graph mode",
         selectedCount: "Selected: {n} vertices, {m} hyperedges", showOnlySelected: "Show only", clearSelection: "Clear",
         hiddenLabel: "Hidden", restoreAll: "Restore all",
-        fadedHint: "faded: left out of the layout; hover a linked vertex to see the link", fadedRelations: "Links to hub vertices", zoomIn: "Zoom in", zoomOut: "Zoom out", fitView: "Fit to view", fullscreen: "Full screen", exitFullscreen: "Exit full screen",
+        fadedHint: "faded: left out of the layout; hover a linked vertex to see the link", fadedRelations: "Links to hub vertices",
         tagRelayout: "re-layout", tagRestyle: "restyle",
         groupLayout: "Layout", layoutAlgorithm: "Algorithm", layoutHypergraph: "Hypergraph layout",
         layoutForce: "Force", layoutCircular: "Circular", useCenter: "Center on selected vertex",
@@ -57,10 +53,6 @@ const MESSAGES = {
         labelFontSize: "Font size", labelBy: "Style", labelUniform: "Uniform", labelByDegree: "By degree", labelOverlap: "Overlap", labelOverlapHide: "Hide", labelOverlapLayout: "Avoid in layout", labelOverlapAllow: "Allow", labelMaxLength: "Max length", labelMaxLengthHint: "Truncate longer labels (characters); 0 = no limit. Long labels stretch hyperedges when label overlap is prevented", resetSettings: "Reset settings", resetColors: "Reset colors",
     },
     zh: {
-        pageTitle: "超图可视化",
-        dataSource: "数据源",
-        useDefaultData: "示例数据集", remoteHif: "远程 .hgdb / HIF 地址", uploadHif: "上传 .hgdb / HIF 文件",
-        hifUrlPlaceholder: "输入 .hgdb / HIF 文件地址", load: "加载", loading: "加载中...",
         databaseInfo: "数据库信息",
         verticesLabel: "实体：", hyperedgesLabel: "超边：", edgesLabel: "边：",
         searchList: "搜索与实体列表",
@@ -92,7 +84,7 @@ const MESSAGES = {
         noteMembersHidden: "成员已隐藏", noteNotDrawnInGraph: "图模式不绘制",
         selectedCount: "已选 实体 {n} · 超边 {m}", showOnlySelected: "只看所选", clearSelection: "清除",
         hiddenLabel: "已隐藏", restoreAll: "全部恢复",
-        fadedHint: "淡出：不参与布局，悬停与它相关的实体可查看关联", fadedRelations: "与枢纽实体的关联", zoomIn: "放大", zoomOut: "缩小", fitView: "视图居中（适应画布）", fullscreen: "全屏", exitFullscreen: "退出全屏",
+        fadedHint: "淡出：不参与布局，悬停与它相关的实体可查看关联", fadedRelations: "与枢纽实体的关联",
         tagRelayout: "重新布局", tagRestyle: "重绘",
         groupLayout: "布局", layoutAlgorithm: "布局算法", layoutHypergraph: "超图布局",
         layoutForce: "力导", layoutCircular: "环形", useCenter: "以中心实体为中心",
@@ -109,47 +101,57 @@ const MESSAGES = {
         labelFontSize: "字号", labelBy: "样式", labelUniform: "统一", labelByDegree: "按度数", labelOverlap: "重叠时", labelOverlapHide: "隐藏", labelOverlapLayout: "布局避让", labelOverlapAllow: "允许重叠", labelMaxLength: "最大长度", labelMaxLengthHint: "标签超过该字符数时截断，0 表示不限。防止标签重叠时，过长的标签会把超边拉长", resetSettings: "恢复默认设置", resetColors: "恢复默认颜色",
     },
 };
-const LANG_KEY = "hypergraph-viewer-lang";
+// eslint-disable-next-line react-refresh/only-export-components
+export const LANGUAGES = [["en", "EN"], ["zh", "中文"]];
 
-// 优先级：网址 ?lang=（en / zh）> 上次的选择 > 浏览器语言
-const detectLang = () => {
-    const fromUrl = getUrlParam("lang");
-    if (fromUrl in MESSAGES) return fromUrl;
+const I18nContext = createContext(null);
+
+// locale：'en' | 'zh'；messages：{ en: {...}, zh: {...} }，覆盖或补充文字（宿主自己的组件放进面板插槽时也能用 useI18n 取到）
+// setLang：切换语言的回调，传了时标题栏显示语言切换
+export const I18nProvider = ({ locale = "en", messages, setLang, children }) => {
+    const lang = locale in MESSAGES ? locale : "en";
+    const t = useCallback((key, vars = {}) => {
+        // 未收录的键原样返回（如服务端返回的错误信息）
+        const msg = messages?.[lang]?.[key] ?? MESSAGES[lang][key] ?? messages?.en?.[key] ?? MESSAGES.en[key] ?? key;
+        return msg.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
+    }, [lang, messages]);
+    const value = useMemo(() => ({ lang, setLang, t }), [lang, setLang, t]);
+    return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
+};
+
+// 记住的语言，没有时按浏览器语言
+const initialLocale = (storageKey) => {
     try {
-        const saved = localStorage.getItem(LANG_KEY);
-        if (saved in MESSAGES) return saved;
+        const saved = storageKey && localStorage.getItem(storageKey);
+        if (LANGUAGES.some(([code]) => code === saved)) return saved;
     } catch {
-        // localStorage 不可用时按浏览器语言
+        // 读不到（隐私模式等）时按浏览器语言
     }
     return (navigator.language || "").toLowerCase().startsWith("zh") ? "zh" : "en";
 };
 
-const I18nContext = createContext(null);
-
-export const I18nProvider = ({ children }) => {
-    const [lang, setLang] = useState(detectLang);
-    const t = useCallback((key, vars = {}) => {
-        // 未收录的键原样返回（如服务端返回的错误信息）
-        const msg = MESSAGES[lang][key] ?? MESSAGES.en[key] ?? key;
-        return msg.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m));
-    }, [lang]);
-
-    useEffect(() => {
-        document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-        document.title = MESSAGES[lang].pageTitle;
-        setUrlParam("lang", lang);
+/**
+ * 界面语言：传了 locale 时由宿主管理（onLocaleChange 为切换回调，可不传）；
+ * 不传时自己管理，初始为 storageKey 记住的或浏览器语言，切换后记住并通知 onLocaleChange。返回 [语言, 切换函数]
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const useLocale = ({ locale, onLocaleChange, localeStorageKey }) => {
+    const [own, setOwn] = useState(() => initialLocale(localeStorageKey));
+    if (locale !== undefined) return [locale, onLocaleChange];
+    const setLang = (next) => {
+        setOwn(next);
         try {
-            localStorage.setItem(LANG_KEY, lang);
+            if (localeStorageKey) localStorage.setItem(localeStorageKey, next);
         } catch {
-            // 忽略：只是记不住选择
+            // 忽略：只是记不住语言
         }
-    }, [lang]);
-
-    return <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>;
+        onLocaleChange?.(next);
+    };
+    return [own, setLang];
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
-export const LANGUAGES = [["en", "EN"], ["zh", "中文"]];
+// 在 I18nProvider 之外使用（如单独用面板组件而没有包一层）时按英文
+const FALLBACK = { lang: "en", setLang: undefined, t: (key, vars = {}) => (MESSAGES.en[key] ?? key).replace(/\{(\w+)\}/g, (m, k) => (k in vars ? vars[k] : m)) };
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const useI18n = () => useContext(I18nContext);
+export const useI18n = () => useContext(I18nContext) ?? FALLBACK;
