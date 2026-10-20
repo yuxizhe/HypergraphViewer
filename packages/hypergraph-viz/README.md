@@ -1,6 +1,6 @@
 # hypergraph-viz
 
-基于 G6 v5 的超图渲染：超图布局（HypergraphLayout）、只圈节点的超边轮廓、悬停与点击高亮。
+基于 G6 v5 的超图渲染：超图布局（HypergraphLayout）、只圈节点的超边轮廓、悬停与点击高亮；另有带左右面板的超图浏览器。
 HypergraphViewer、Hyper-RAG web-ui、Hypergraph-DB viewer 共用这一份实现。
 
 `@antv/g6`（5.0.x）为 peer 依赖，扩展注册在宿主项目自己的 G6 上，需确保项目中只有一份 G6。
@@ -26,8 +26,13 @@ import { HypergraphView } from 'hypergraph-viz/react';
   centerNode={vertexId}
   onHover={(hit) => ...}   // { kind: 'node' | 'edge' | 'hyperedge', id, item, client } | null
   onSelect={(hit) => ...}  // 点击超边选中，再点或点空白处取消
+  preset="explorer"        // 与超图浏览器相同的渲染参数（悬停高亮、按度数分级、重叠标签隐藏等），单独传的选项优先
+  toolbar={{ size: 'small', locale: 'zh' }}  // 右上角工具栏：放大、缩小、视图居中、全屏；true 为默认样式
 />
 ```
+
+工具栏样式是内联的，不需要引入样式表。全屏默认让视图自身全屏，`toolbar.fullscreen` 可指定更大的元素（`ref`），`false` 不显示全屏按钮；
+放进 `<HypergraphView>` 的子元素画在画布上方，随视图一起全屏。宿主的悬停卡片若用 portal，全屏时应挂到 `document.fullscreenElement` 下。
 
 ### 多选、隐藏与样式
 
@@ -70,6 +75,45 @@ viewRef.current.fitView();           // 视图居中
 数据或布局相关选项变化时重新布局；只有颜色、轮廓、主题配色变化时只重绘，节点位置不变。
 对象类选项（`typeColors`、`layout`、`theme` 等）需由宿主保持引用稳定（`useMemo`）。
 
+## 超图浏览器（面板）
+
+`hypergraph-viz/explorer` 是完整的浏览界面：左栏（数据库统计、实体列表、超边列表）、画布（悬停卡片、工具栏、已隐藏标签条）、
+右栏（子图统计、实体与超边表、渲染设置、详情）。和只有画布的 `hypergraph-viz/react` 分开，只用画布的项目不会引入面板代码。
+
+```tsx
+import { createLocalSource, fromHIF, HypergraphExplorer, Section } from 'hypergraph-viz/explorer';
+import 'hypergraph-viz/style.css';   // 选择器都限定在 .hv-root 下，宿主不需要装 Tailwind
+
+<HypergraphExplorer
+  source={createLocalSource(fromHIF(hif))}   // 换一个 source 对象即重新载入
+  defaultCenter="STROKE"
+  panels={{ database: true, inspector: true, header: true }}
+  localeStorageKey="my-app-lang"             // 浏览器自己管理语言：记住选择，标题栏可切换；或传 locale + onLocaleChange 由宿主管理
+  messages={{ zh: { neighborhoodCol: '度数' } }}   // 覆盖或补充界面文字
+  defaultRenderSettings={{ autoHideDegree: 0 }}   // 「渲染」设置的默认值；0 表示不自动隐藏高度数实体（默认隐藏度数 > 30 的）
+  storageKey="my-app"                        // 渲染设置、颜色存到 localStorage；false 不存
+  title="My Hypergraph"
+  databaseHeader={<Section title="数据源" open onToggle={...}>...</Section>}  // 左栏顶部插槽
+/>
+```
+
+没有后端时用 `createLocalSource`（输入为 `fromHIF` / `parseHIF` / `loadHIFFromURL` / `loadHIFFromFile` 的结果，后两者也能读 Hypergraph-DB 的 `.hgdb` 文件）。
+有后端时实现同样接口的数据源即可，`listHyperedges` 可省略（左栏就没有超边列表），`overview` 只给 `database` 时左栏只显示计数：
+
+```ts
+const source: HypergraphSource = {
+  overview: async () => ({ database: { name, vertices, edges }, listedTypes }),
+  listVertices: ({ page, pageSize, search, sortBy, sortOrder, types }) => fetchJSON(...),  // { data, pagination }
+  subgraph: async (center) => fromKeyedEdges(await fetchJSON(...)),
+};
+```
+
+想自己排布局时，用 `useHypergraphExplorer(options)` 拿到 `databaseProps` / `canvasProps` / `inspectorProps`，
+分别交给 `DatabasePanel` / `GraphCanvas` / `InspectorPanel`。
+
+样式：主色可在 `.hv-root` 上覆盖 `--color-primary-50 / 500 / 600 / 700`。预置样式在 `@layer hv-base` 中，
+宿主用 Tailwind 4 时先引入本包样式，放进插槽的宿主组件可用自己的工具类覆盖它。
+
 ## 不用框架
 
 ```ts
@@ -83,7 +127,18 @@ view.destroy();
 
 ## `<script>` 页面
 
-先引入 G6 的 UMD 包（`window.G6`），再引入 `dist/hypergraph-viz.global.js`，全局变量为 `window.HypergraphViz`。
+只用画布：先引入 G6 的 UMD 包（`window.G6`），再引入 `dist/hypergraph-viz.global.js`，全局变量为 `window.HypergraphViz`。
+
+带面板：依次引入 G6、React 18+、ReactDOM 的 UMD 包，再引入 `dist/hypergraph-viz.explorer.global.js` 与 `dist/style.css`：
+
+```js
+const { mountExplorer } = window.HypergraphViz;
+const explorer = mountExplorer(document.getElementById('root'), { source, localeStorageKey: 'my-app-lang' });
+explorer.update({ defaultCenter: 'STROKE' });   // 合并新的 props 重新渲染
+```
+
+文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.0/dist/hypergraph-viz.explorer.global.js`
+与 `https://unpkg.com/hypergraph-viz@0.2.0/dist/style.css`。
 
 ## 只用其中一部分
 

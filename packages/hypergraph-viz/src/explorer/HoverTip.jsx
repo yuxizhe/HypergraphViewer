@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PropertyList } from './DetailsPanel.jsx';
-import { useI18n } from '../i18n.jsx';
+import { useI18n } from './i18n.jsx';
 
 const TIP_OFFSET = 12;
 const TIP_MARGIN = 8;
@@ -30,7 +30,9 @@ const HoverTip = ({ title, item, priority, exclude, limit, related, x, y }) => {
         setPos((prev) => (prev.left === left && prev.top === top ? prev : { left, top }));
     }, [item, related, x, y]);
 
+    // 挂到面板之外，套一层 hv-root 才能用上包里限定在 .hv-root 下的样式
     return createPortal(
+        <div className="hv-root">
         <div
             ref={ref}
             className="fixed z-[2000] w-80 overflow-hidden pointer-events-none break-words bg-white/95 border border-gray-200 rounded-md shadow-lg p-3"
@@ -55,6 +57,7 @@ const HoverTip = ({ title, item, priority, exclude, limit, related, x, y }) => {
                     </div>
                 )}
             </div>
+        </div>
         </div>,
         document.fullscreenElement || document.body
     );

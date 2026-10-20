@@ -24,9 +24,10 @@ export const DEFAULT_RENDER_SETTINGS = {
 // 用户改过的颜色：实体类型、单个实体、单条超边、超边类型
 export const EMPTY_COLOR_OVERRIDES = { types: {}, nodes: {}, hyperedges: {}, hyperedgeTypes: {} };
 
-// 存在 localStorage 中的状态；读写失败（隐私模式等）时只在本次会话有效
+// 存在 localStorage 中的状态；key 为 false 时不存，读写失败（隐私模式等）时只在本次会话有效
 export const useStoredState = (key, initial) => {
     const [value, setValue] = useState(() => {
+        if (!key) return initial;
         try {
             const saved = JSON.parse(localStorage.getItem(key));
             return saved && typeof saved === "object" ? { ...initial, ...saved } : initial;
@@ -35,6 +36,7 @@ export const useStoredState = (key, initial) => {
         }
     });
     useEffect(() => {
+        if (!key) return;
         try {
             localStorage.setItem(key, JSON.stringify(value));
         } catch {

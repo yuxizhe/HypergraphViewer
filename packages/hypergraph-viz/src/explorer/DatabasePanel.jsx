@@ -1,10 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import DataSourceSelector from './DataSourceSelector.jsx';
 import Section from './panel/Section.jsx';
 import StatsTab from './panel/StatsTab.jsx';
 import TypeChips from './panel/TypeChips.jsx';
-import { useI18n } from '../i18n.jsx';
-import { DATASETS } from '../datasets.js';
+import { useI18n } from './i18n.jsx';
 
 const ROW = "grid grid-cols-[58px_minmax(0,1fr)] items-center gap-2";
 
@@ -38,9 +36,11 @@ const Bar = ({ value, max }) => (
 // 选中集合中增删一个类型
 const toggleIn = (list, type) => (list.includes(type) ? list.filter((x) => x !== type) : [...list, type]);
 
-// 左侧栏：数据源、已载入超图的统计、实体列表（点选切换中心实体）、超边列表（点选跳到含该超边的子图并选中）；
-// 实体、超边列表均可按类型筛选
-const Sidebar = ({
+// 左侧栏：宿主的插槽（如数据源选择）、已载入超图的统计、实体列表（点选切换中心实体）、超边列表（点选跳到含该超边的子图并选中）；
+// 实体、超边列表均可按类型筛选。title：栏顶标题，不传时不显示；header：插在统计卡片之前（可用 Section 做成同样的卡片）
+const DatabasePanel = ({
+    title,
+    header,
     loadedHypergraph,
     loadedStats,
     vertexTypes,
@@ -60,16 +60,13 @@ const Sidebar = ({
     hyperedgeSearch,
     setHyperedgeSearch,
     onPickHyperedge,
+    hasHyperedgeList = true,
     selectedHyperedges,
     typeColorOf,
-    // Data source props
-    onDataSourceChange,
-    currentDataSource,
-    dataSourceLoading,
-    dataSourceError,
+    className = "",
 }) => {
-    const { t, lang } = useI18n();
-    const [open, setOpen] = useState({ source: true, stats: true, nodes: true, hyperedges: false });
+    const { t } = useI18n();
+    const [open, setOpen] = useState({ stats: true, nodes: true, hyperedges: false });
     const [hyperedgeTypes, setHyperedgeTypes] = useState([]);
     const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
     // 换数据源、换页、搜索后列表回到顶部
@@ -82,12 +79,6 @@ const Sidebar = ({
         if (hyperedgeListRef.current) hyperedgeListRef.current.scrollTop = 0;
     }, [hyperedges, hyperedgeTypes]);
 
-    const sourceLabel =
-        currentDataSource.type === "static"
-            ? DATASETS.find((d) => d.id === currentDataSource.dataset)?.name[lang]
-            : currentDataSource.type === "remote"
-                ? currentDataSource.url
-                : currentDataSource.file?.name;
     const typeOfHyperedge = (he) => he.type || null;
     const hyperedgeTypeChips = useMemo(() => {
         const count = new Map();
@@ -132,30 +123,22 @@ const Sidebar = ({
     );
 
     return (
-        <div className="w-80 h-screen bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl shrink-0 flex flex-col">
-            <h2 className="text-xl font-bold text-gray-800 px-3 py-3 border-b border-gray-200 shrink-0">
-                Hypergraph-Viewer
-            </h2>
+        <div className={`w-80 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl shrink-0 flex flex-col ${className}`}>
+            {title && (
+                <h2 className="text-xl font-bold text-gray-800 px-3 py-3 border-b border-gray-200 shrink-0">
+                    {title}
+                </h2>
+            )}
 
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
-                <Section
-                    title={t("dataSource")}
-                    subtitle={sourceLabel}
-                    open={open.source || !!dataSourceError}
-                    onToggle={toggle("source")}
-                >
-                    <DataSourceSelector
-                        onDataSourceChange={onDataSourceChange}
-                        currentSource={currentDataSource}
-                        loading={dataSourceLoading}
-                        hideTitle
-                    />
-                    {dataSourceError && (
-                        <div className="mt-2 p-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-md">{dataSourceError}</div>
-                    )}
-                </Section>
+                {header}
 
                 <Section title={t("databaseInfo")} open={open.stats} onToggle={toggle("stats")}>
+                    {!loadedStats && database && (
+                        <div className="text-xs text-gray-600">
+                            {t("verticesLabel")} {database.vertices} · {t("hyperedgesLabel")} {database.edges}
+                        </div>
+                    )}
                     {loadedStats && (
                         <>
                             {partial && (
@@ -198,7 +181,7 @@ const Sidebar = ({
                                     key={v.id}
                                     onClick={() => setSelectedVertex(v.id)}
                                     title={v.description ? `${v.id}\n${v.description}` : v.id}
-                                    className={`${ROW} w-full text-left px-1 py-1 text-xs border-b border-gray-50 ${selectedVertex === v.id
+                                    className={`${ROW} w-full text-left px-1 py-1 text-xs border-b border-gray-50 ${String(selectedVertex) === String(v.id)
                                         ? "bg-primary-50 shadow-[inset_3px_0_0] shadow-primary-500"
                                         : "hover:bg-gray-50"
                                         }`}
@@ -206,7 +189,7 @@ const Sidebar = ({
                                     <Bar value={v.degree || 0} max={maxNeighborhood} />
                                     <span className="flex items-center gap-1 min-w-0">
                                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: typeColorOf(v.entity_type || null) }} />
-                                        <span className={`truncate ${selectedVertex === v.id ? "font-semibold text-primary-700" : "text-gray-800"}`}>
+                                        <span className={`truncate ${String(selectedVertex) === String(v.id) ? "font-semibold text-primary-700" : "text-gray-800"}`}>
                                             {v.id}
                                         </span>
                                         {v.entity_type && (
@@ -240,7 +223,7 @@ const Sidebar = ({
                     )}
                 </Section>
 
-                <Section
+                {hasHyperedgeList && <Section
                     title={t("tab_hyperedges")}
                     count={shownHyperedges.length}
                     open={open.hyperedges}
@@ -284,10 +267,10 @@ const Sidebar = ({
                             );
                         })}
                     </div>
-                </Section>
+                </Section>}
             </div>
         </div>
     );
 };
 
-export default Sidebar;
+export default DatabasePanel;

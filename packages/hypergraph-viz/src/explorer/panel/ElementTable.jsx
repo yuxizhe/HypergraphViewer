@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import ColorSwatch from './ColorSwatch.jsx';
-import { useI18n } from '../../i18n.jsx';
+import { useI18n } from '../i18n.jsx';
 
 const EyeIcon = ({ off }) => (
     <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">

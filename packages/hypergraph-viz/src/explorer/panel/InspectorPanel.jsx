@@ -1,11 +1,11 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { hyperedgeIdOf } from 'hypergraph-viz';
+import { hyperedgeIdOf } from '../../analysis';
 import DetailsPanel from '../DetailsPanel.jsx';
 import ElementTable from './ElementTable.jsx';
 import Section, { Chevron } from './Section.jsx';
 import RenderTab from './RenderTab.jsx';
 import StatsTab from './StatsTab.jsx';
-import { useI18n } from '../../i18n.jsx';
+import { useI18n } from '../i18n.jsx';
 
 // 超边在表格中的名称：description / summary / keywords，都没有时列出成员
 const hyperedgeName = (item, members) =>

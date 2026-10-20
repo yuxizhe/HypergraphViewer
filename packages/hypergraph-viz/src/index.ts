@@ -16,3 +16,7 @@ export type { BubbleState, HypergraphTheme } from './theme';
 export { DEFAULT_THEME, resolveTheme, typeColorsOf } from './theme';
 export type { HypergraphHit, HypergraphView, ViewOptions } from './view';
 export { createHypergraphView } from './view';
+export type {
+  HypergraphSource, LocalHypergraphData, SourceOverview, VertexListPage, VertexListQuery,
+} from './source';
+export { createLocalSource, fromHIF, loadHIFFromFile, loadHIFFromURL, parseHIF } from './source';

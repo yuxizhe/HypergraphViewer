@@ -1,18 +1,12 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { centerSizes, fetchGraphData, fetchHyperedges, fetchLoadedHypergraph, fetchVertices, dataSourceManager } from '../api.js';
-import {
-    DEFAULT_THEME, EMPTY_SELECTION, filterHypergraph, fromKeyedEdges, hyperedgeColorsOf, hyperedgeIdOf,
-    hypergraphStats, isEmptySelection, pairId, typeColorsOf,
-} from 'hypergraph-viz';
-import Sidebar from './Sidebar.jsx';
-import GraphContainer from './GraphContainer.jsx';
-import InspectorPanel from './panel/InspectorPanel.jsx';
-import { LANGUAGES, useI18n } from '../i18n.jsx';
-import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from '../viewSettings.js';
-import { DATASETS, initialSource, rememberSource } from '../datasets.js';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats } from '../analysis';
+import { EMPTY_SELECTION, isEmptySelection } from '../selection';
+import { pairId } from '../spec';
+import { DEFAULT_THEME, typeColorsOf } from '../theme';
+import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from './settings.js';
 
 // faded：隐藏的实体中“淡出”的部分（不参与布局，悬停、选中相关元素时在画布上显示与它们的关联），其余彻底隐藏
-const EMPTY_HIDDEN = { nodes: [], hyperedges: [], faded: [] };
+export const EMPTY_HIDDEN = { nodes: [], hyperedges: [], faded: [] };
 
 // 在 map 中设置 / 删除（value 为 null）一项，返回新对象
 const put = (map, key, value) => {
@@ -22,29 +16,51 @@ const put = (map, key, value) => {
     return next;
 };
 
-export default function HypergraphViewer() {
-    const { lang, setLang, t } = useI18n();
+/**
+ * HypergraphExplorer 的全部状态：左栏（数据源的统计、实体列表、超边列表）、当前子图、选择与隐藏、渲染设置与颜色。
+ * 返回 databaseProps / canvasProps / inspectorProps，分别交给 DatabasePanel / GraphCanvas / InspectorPanel，宿主可自行排布
+ *
+ * source：数据源（见 createLocalSource），换一个对象即重新载入；不传时用 data（单个超图）与 centerNode，没有左栏
+ * defaultCenter：载入数据源后默认显示的中心实体（不设时为实体列表中的第一个）
+ * hiddenTypes：打开子图时默认彻底隐藏的实体类型
+ * defaultRenderSettings：「渲染」设置的默认值（覆盖 DEFAULT_RENDER_SETTINGS 中的项）
+ * storageKey：渲染设置、颜色存到 localStorage 的键前缀；false 不存
+ */
+export function useHypergraphExplorer({
+    source,
+    data,
+    centerNode,
+    defaultCenter,
+    hiddenTypes,
+    defaultRenderSettings,
+    storageKey = "hypergraph-viewer",
+    pageSize = 50,
+    onCenterChange,
+    onSelectionChange: onSelectionChangeProp,
+} = {}) {
     const searchTimeoutRef = useRef(null);
+    // 换数据源时才读取的选项，经 ref 取最新值
+    const optionsRef = useRef({});
+    optionsRef.current = { defaultCenter, hiddenTypes, onCenterChange, onSelectionChange: onSelectionChangeProp };
 
-    // 左侧栏：已载入超图（用于统计）、超边列表、实体类型筛选（dataVersion 在换数据源后递增，触发重新读取）
-    const [loadedHypergraph, setLoadedHypergraph] = useState(null);
+    // 左侧栏：数据源概览（用于统计）、超边列表、实体类型筛选
+    const [overview, setOverview] = useState(null);
     const [vertexTypes, setVertexTypes] = useState([]);
     const vertexTypesRef = useRef(vertexTypes);
     vertexTypesRef.current = vertexTypes;
     const [hyperedgeList, setHyperedgeList] = useState([]);
     const [hyperedgeSearch, setHyperedgeSearch] = useState("");
-    const [dataVersion, setDataVersion] = useState(0);
     // 从左侧超边列表跳到另一个子图时，子图加载后要选中的超边
     const pendingSelectionRef = useRef(null);
     const [vertices, setVertices] = useState([]);
     const [pagination, setPagination] = useState({
         page: 1,
-        page_size: 50,
+        page_size: pageSize,
         total: 0,
         total_pages: 0,
     });
     const [selectedVertex, setSelectedVertex] = useState("");
-    const [graphData, setGraphData] = useState(null);
+    const [sourceGraph, setSourceGraph] = useState(null);
     const [loading, setLoading] = useState(false);
     const [loadingVertices, setLoadingVertices] = useState(false);
     const [error, setError] = useState("");
@@ -54,92 +70,63 @@ export default function HypergraphViewer() {
     const [visualizationMode, setVisualizationMode] = useState("hyper");
     const [hoverHyperedge, setHoverHyperedge] = useState(null);
     const [hoverNode, setHoverNode] = useState(null);
-    const [currentDataSource, setCurrentDataSource] = useState(initialSource);
-    const [dataSourceLoading, setDataSourceLoading] = useState(false);
-    const [dataSourceError, setDataSourceError] = useState("");
 
     // 子图统计、选择与隐藏、渲染设置与颜色（右侧面板）
     const [selection, setSelection] = useState(EMPTY_SELECTION);
+    const selectionSeenRef = useRef(selection);
+    useEffect(() => {
+        if (selection === selectionSeenRef.current) return;
+        selectionSeenRef.current = selection;
+        optionsRef.current.onSelectionChange?.(selection);
+    }, [selection]);
     // 手动调整过的隐藏；hiddenGraph 为它所属的子图（换子图后、同步前用自动隐藏的结果，见下方 hidden）
     const [hiddenState, setHidden] = useState(EMPTY_HIDDEN);
     const [hiddenGraph, setHiddenGraph] = useState(null);
     const [focusId, setFocusId] = useState(null);
-    const [renderSettings, setRenderSettings] = useStoredState("hypergraph-viewer-render", DEFAULT_RENDER_SETTINGS);
-    const [colorOverrides, setColorOverrides] = useStoredState("hypergraph-viewer-colors", EMPTY_COLOR_OVERRIDES);
+    // 宿主可改默认值（如不自动隐藏），用户在「渲染」里改过的仍以存下的为准
+    const renderDefaults = useMemo(
+        () => ({ ...DEFAULT_RENDER_SETTINGS, ...defaultRenderSettings }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [JSON.stringify(defaultRenderSettings ?? {})]
+    );
+    const [renderSettings, setRenderSettings] = useStoredState(storageKey && `${storageKey}-render`, renderDefaults);
+    const [colorOverrides, setColorOverrides] = useStoredState(storageKey && `${storageKey}-colors`, EMPTY_COLOR_OVERRIDES);
     const viewRef = useRef(null);
+
+    // 没有数据源时显示传入的超图，中心由宿主指定
+    const center = source ? selectedVertex : centerNode ?? "";
+    const hypergraph = source ? sourceGraph : data ?? null;
+
+    useEffect(() => {
+        if (source && selectedVertex) optionsRef.current.onCenterChange?.(selectedVertex);
+    }, [source, selectedVertex]);
 
     // Generate entity type color mapping
     // 按整个数据源（已载入的实体）分配类型颜色，不随列表翻页、筛选变化；左右两栏共用
     const entityTypeColors = useMemo(() => {
-        return typeColorsOf(loadedHypergraph ? Object.values(loadedHypergraph.vertices) : vertices);
-    }, [loadedHypergraph, vertices]);
-
-    // Handle data source change
-    const handleDataSourceChange = async (newSource) => {
-        setDataSourceLoading(true);
-        setDataSourceError("");
-
-        try {
-            const result = await dataSourceManager.setDataSource(newSource);
-
-            if (result.success) {
-                setCurrentDataSource(newSource);
-                rememberSource(newSource);
-
-                // Refresh all data after successful data source change
-                setDataVersion((v) => v + 1);
-
-                // 先清空上一份数据的选中与详情，再加载列表（加载后会选中第一个实体）
-                setSelectedVertex("");
-                setGraphData(null);
-                setHoverNode(null);
-                setHoverHyperedge(null);
-                // 新数据的类型不同，清掉类型筛选
-                vertexTypesRef.current = [];
-                setVertexTypes((v) => (v.length ? [] : v));
-
-                // Reload vertices with current search/sort settings
-                await loadVertices(1, searchTerm, sortBy, sortOrder);
-                // 示例数据集可指定默认中心（loadVertices 选中的是度数最高的实体）
-                const center = newSource.type === 'static' && DATASETS.find((d) => d.id === newSource.dataset)?.center;
-                if (center && result.data.graphs[center]) setSelectedVertex(center);
-            } else {
-                setDataSourceError(result.error);
-            }
-        } catch (error) {
-            console.error("Data source switch failed:", error);
-            setDataSourceError(error.message);
-        } finally {
-            setDataSourceLoading(false);
-        }
-    };
-
-    // 首次挂载时下载默认（或网址指定的）示例数据集
-    useEffect(() => {
-        handleDataSourceChange(currentDataSource);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+        return typeColorsOf(overview?.vertices ? Object.values(overview.vertices) : vertices);
+    }, [overview, vertices]);
 
     // Load vertices list
-    const loadVertices = async (page, search, sortBy, sortOrder) => {
+    // （当前选中的实体仍可作为中心时保留：翻页、搜索、排序不换中心，指定的默认中心也不被覆盖）
+    const loadVertices = async (page, search, sortBy, sortOrder, centers = overview?.centers) => {
+        if (!source) return;
         setLoadingVertices(true);
         try {
-            const result = await fetchVertices(
+            const result = await source.listVertices({
                 page,
-                pagination.page_size,
+                pageSize,
                 search,
                 sortBy,
                 sortOrder,
-                vertexTypesRef.current
-            );
+                types: vertexTypesRef.current,
+            });
             setVertices(result.data);
             setPagination(result.pagination);
 
             // If no vertex selected and data exists, select the first one
-            // （当前选中的实体仍在数据中时保留：翻页、搜索、排序不换中心，示例数据集指定的中心也不被覆盖）
             if (result.data.length > 0) {
-                const centers = centerSizes();
-                setSelectedVertex((cur) => (cur && centers.has(cur) ? cur : result.data[0].id));
+                setSelectedVertex((cur) => (cur && (!centers || centers.has(cur)) ? cur : result.data[0].id));
             }
         } catch (err) {
             console.error("Failed to load vertices:", err);
@@ -148,8 +135,46 @@ export default function HypergraphViewer() {
         }
     };
 
-    // Search debounce
+    // 换数据源：清空上一份数据的选中与详情，读取概览与实体列表（加载后选中第一个实体或默认中心）
     useEffect(() => {
+        if (!source) return;
+        let cancelled = false;
+        setSelectedVertex("");
+        setSourceGraph(null);
+        setOverview(null);
+        setHoverNode(null);
+        setHoverHyperedge(null);
+        // 新数据的类型不同，清掉类型筛选
+        vertexTypesRef.current = [];
+        setVertexTypes((v) => (v.length ? [] : v));
+        (async () => {
+            try {
+                const next = await source.overview();
+                if (cancelled) return;
+                setOverview(next);
+                await loadVertices(1, searchTerm, sortBy, sortOrder, next.centers);
+                if (cancelled) return;
+                const preferred = optionsRef.current.defaultCenter;
+                if (preferred && (!next.centers || next.centers.has(preferred))) setSelectedVertex(preferred);
+            } catch (err) {
+                console.error("Failed to load data source:", err);
+                if (!cancelled) setError("loadFailed");
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [source]);
+
+    // Search debounce
+    const searchLoadedRef = useRef(false);
+    useEffect(() => {
+        // 首次由换数据源的 effect 载入
+        if (!searchLoadedRef.current) {
+            searchLoadedRef.current = true;
+            return;
+        }
         if (searchTimeoutRef.current) {
             clearTimeout(searchTimeoutRef.current);
         }
@@ -163,6 +188,7 @@ export default function HypergraphViewer() {
                 clearTimeout(searchTimeoutRef.current);
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [searchTerm]);
 
     // Reload when sort changes
@@ -170,6 +196,7 @@ export default function HypergraphViewer() {
         if (vertices.length > 0) {
             loadVertices(pagination.page, searchTerm, sortBy, sortOrder);
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [sortBy, sortOrder]);
 
     // Load when page changes
@@ -178,47 +205,52 @@ export default function HypergraphViewer() {
     };
 
     // Load graph data
-    // 也随 dataVersion 重新读取：换数据源时先清空再选回同一个中心，React 合并更新后 selectedVertex 不变，
+    // 也随 source 重新读取：换数据源时先清空再选回同一个中心，React 合并更新后 selectedVertex 不变，
     // 只看 selectedVertex 时画布会一直是空的（StrictMode 下首次加载执行两遍，刷新时常出现）
     useEffect(() => {
-        if (selectedVertex) {
-            setLoading(true);
-            setError("");
-
-            fetchGraphData(selectedVertex)
-                .then((data) => {
-                    if (data.error) {
-                        setError(data.error);
-                    } else {
-                        setGraphData(data);
-                    }
-                })
-                .catch((err) => {
-                    // 存翻译键，显示时翻译
-                    setError("loadFailed");
-                    console.error(err);
-                })
-                .finally(() => {
-                    setLoading(false);
-                });
-        }
-    }, [selectedVertex, dataVersion]);
-
-    // 换数据源后重新读取全库概览
-    useEffect(() => {
-        if (!dataVersion) return;
-        fetchLoadedHypergraph().then(setLoadedHypergraph).catch(console.error);
-    }, [dataVersion]);
+        if (!source || !selectedVertex) return;
+        let cancelled = false;
+        setLoading(true);
+        setError("");
+        source
+            .subgraph(selectedVertex)
+            .then((graph) => {
+                if (!cancelled) setSourceGraph(graph);
+            })
+            .catch((err) => {
+                // 存翻译键，显示时翻译
+                if (!cancelled) setError("loadFailed");
+                console.error(err);
+            })
+            .finally(() => {
+                if (!cancelled) setLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [source, selectedVertex]);
 
     // 可浏览超边列表：搜索或换数据源时重新筛选
     useEffect(() => {
+        if (!source?.listHyperedges) {
+            setHyperedgeList([]);
+            return;
+        }
         const timer = setTimeout(() => {
-            fetchHyperedges(hyperedgeSearch).then(setHyperedgeList).catch(console.error);
+            source.listHyperedges({ search: hyperedgeSearch }).then(setHyperedgeList).catch(console.error);
         }, 200);
         return () => clearTimeout(timer);
-    }, [hyperedgeSearch, dataVersion]);
+    }, [hyperedgeSearch, source]);
 
-    const loadedStats = useMemo(() => loadedHypergraph && hypergraphStats(loadedHypergraph), [loadedHypergraph]);
+    // 概览带了实体与超边时统计全库（已载入部分）；只有数据库计数时左栏只显示计数
+    const loadedHypergraph = useMemo(
+        () => overview && { ...overview, vertices: overview.vertices || {}, hyperedges: overview.hyperedges || [] },
+        [overview]
+    );
+    const loadedStats = useMemo(
+        () => overview?.vertices && overview?.hyperedges && hypergraphStats(loadedHypergraph),
+        [overview, loadedHypergraph]
+    );
 
     // 实体类型筛选变化时回到第一页
     const typesLoadedRef = useRef(false);
@@ -240,17 +272,12 @@ export default function HypergraphViewer() {
         }
     };
 
-    // 超边 key 为用 |#| 拼接的成员，转为 hypergraph-viz 的输入格式
-    const hypergraph = useMemo(() => graphData && fromKeyedEdges(graphData), [graphData]);
-
     // 打开子图时自动隐藏的实体：子图内度数（所在超边数，同右侧实体表的“度数”）超过阈值的，中心也不例外；
-    // 以及示例数据集指定默认隐藏的类型（如金融数据的“财季”）
+    // 以及指定默认隐藏的类型（如金融数据的“财季”）
     const autoHidden = (graph, threshold) => {
         if (!graph) return EMPTY_HIDDEN;
         const { degree } = hypergraphStats(graph);
-        const types = new Set(
-            currentDataSource.type === "static" ? DATASETS.find((d) => d.id === currentDataSource.dataset)?.hiddenTypes : []
-        );
+        const types = new Set(optionsRef.current.hiddenTypes || []);
         // 度数超过阈值的淡出，指定类型的彻底隐藏
         const faded = Object.keys(graph.vertices).filter((id) => threshold && (degree.get(id) || 0) > threshold);
         const typed = Object.keys(graph.vertices).filter(
@@ -364,7 +391,7 @@ export default function HypergraphViewer() {
             typeOverridden: (type) => !!type && type in colorOverrides.types,
             nodeColorOf: (id) =>
                 colorOverrides.nodes[id] ??
-                (id === selectedVertex
+                (id === center
                     ? DEFAULT_THEME.centerColor
                     : typeColors[hypergraph?.vertices[id]?.entity_type] || DEFAULT_THEME.nodeColor),
             nodeOverridden: (id) => id in colorOverrides.nodes,
@@ -378,7 +405,7 @@ export default function HypergraphViewer() {
             setHyperedgeTypeColor: setIn("hyperedgeTypes"),
             reset: () => setColorOverrides(EMPTY_COLOR_OVERRIDES),
         };
-    }, [typeColors, hyperedgeColors, hyperedgeTypeColors, colorOverrides, setColorOverrides, hypergraph, selectedVertex]);
+    }, [typeColors, hyperedgeColors, hyperedgeTypeColors, colorOverrides, setColorOverrides, hypergraph, center]);
 
     const theme = useMemo(
         () => ({
@@ -406,14 +433,14 @@ export default function HypergraphViewer() {
         const cut = (s) => (max && s.length > max ? `${s.slice(0, max - 1)}…` : s);
         if (renderSettings.labelMode === "key") {
             const keep = new Set(stats?.hubs);
-            return (d) => (d.id === selectedVertex || keep.has(d.id) ? cut(String(d.id)) : "");
+            return (d) => (d.id === center || keep.has(d.id) ? cut(String(d.id)) : "");
         }
         return max ? (d) => cut(String(d.id)) : undefined;
-    }, [renderSettings.labelMode, renderSettings.labelMaxLength, stats, selectedVertex]);
+    }, [renderSettings.labelMode, renderSettings.labelMaxLength, stats, center]);
 
     const viewOptions = {
         mode: visualizationMode,
-        centerNode: selectedVertex,
+        centerNode: center,
         typeColors,
         nodeColors: colorOverrides.nodes,
         hyperedgeColors,
@@ -450,13 +477,13 @@ export default function HypergraphViewer() {
             setSelection(target);
             return;
         }
-        const sizes = centerSizes();
-        const center = he.members
-            .filter((m) => sizes.has(m))
-            .sort((a, b) => sizes.get(b) - sizes.get(a))[0];
-        if (center === undefined) return;
+        // 数据源没有给出可作为中心的实体时，按全库度数取成员中最大的
+        const sizes = overview?.centers ?? loadedStats?.degree ?? new Map();
+        const pickable = he.members.filter((m) => !overview?.centers || sizes.has(m));
+        const next = pickable.sort((a, b) => (sizes.get(b) || 0) - (sizes.get(a) || 0))[0];
+        if (next === undefined) return;
         pendingSelectionRef.current = target;
-        setSelectedVertex(center);
+        setSelectedVertex(next);
     };
 
     // 表格行悬停：画布上临时高亮
@@ -522,174 +549,83 @@ export default function HypergraphViewer() {
         }
     }, [hypergraph, visualizationMode, hoverNode, hoverHyperedge]);
 
-    return (
-        <div className="flex h-screen bg-linear-to-br from-gray-50 to-gray-100">
-            {/* Sidebar with integrated Data Source Selector */}
-            <Sidebar
-                loadedHypergraph={loadedHypergraph}
-                loadedStats={loadedStats}
-                vertexTypes={vertexTypes}
-                setVertexTypes={setVertexTypes}
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                vertices={vertices}
-                loadingVertices={loadingVertices || dataSourceLoading}
-                selectedVertex={selectedVertex}
-                setSelectedVertex={setSelectedVertex}
-                pagination={pagination}
-                handlePageChange={handlePageChange}
-                sortBy={sortBy}
-                sortOrder={sortOrder}
-                onSort={onSort}
-                hyperedges={hyperedgeList}
-                hyperedgeSearch={hyperedgeSearch}
-                setHyperedgeSearch={setHyperedgeSearch}
-                onPickHyperedge={onPickHyperedge}
-                selectedHyperedges={selection.hyperedges}
-                typeColorOf={colors.typeColorOf}
-                // Data source props
-                onDataSourceChange={handleDataSourceChange}
-                currentDataSource={currentDataSource}
-                dataSourceLoading={dataSourceLoading}
-                dataSourceError={dataSourceError}
-            />
-
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col bg-white/10 backdrop-blur-sm">
-                <div className="bg-white/95 p-4 border-b border-gray-200/50 flex justify-between items-center shadow-sm">
-                    <div className="flex items-center gap-4">
-                        <h3 className="text-xl font-semibold text-gray-800 m-0">
-                            {t(visualizationMode === "hyper" ? "titleHyper" : "titleGraph")}{" "}
-                            {selectedVertex && `- ${selectedVertex}`}
-                        </h3>
-
-                        {/* Visualization Mode Selector */}
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">{t("modeLabel")}</span>
-                            <div className="flex space-x-1">
-                                {["hyper", "graph"].map((mode) => (
-                                    <button
-                                        key={mode}
-                                        onClick={() => setVisualizationMode(mode)}
-                                        className={`px-3 py-1 text-xs rounded-full transition-all duration-200 ${visualizationMode === mode
-                                            ? "bg-primary-500 text-white shadow-md"
-                                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                            }`}
-                                    >
-                                        {t(mode === "hyper" ? "modeHyper" : "modeGraph")}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                    {graphData && visibleHypergraph && (
-                        <div className="bg-white px-4 py-2 text-sm text-gray-600 rounded-lg shadow-sm border border-gray-200">
-                            <span className="font-semibold">{t("verticesLabel")}</span>{" "}
-                            {Object.keys(visibleHypergraph.vertices).length}
-                            {hidden.nodes.length > 0 && ` / ${Object.keys(graphData.vertices).length}`} |
-                            <span className="font-semibold ml-1">
-                                {t(visualizationMode === "hyper" ? "hyperedgesLabel" : "edgesLabel")}
-                            </span>{" "}
-                            {visualizationMode === "hyper"
-                                ? visibleHypergraph.hyperedges.length
-                                : lineCount}
-                            {visualizationMode === "hyper" &&
-                                visibleHypergraph.hyperedges.length !== hypergraph.hyperedges.length &&
-                                ` / ${hypergraph.hyperedges.length}`}
-                        </div>
-                    )}
-                        <div
-                            className="flex rounded-lg border border-gray-200 overflow-hidden text-xs"
-                            role="group"
-                            aria-label="Language"
-                        >
-                            {LANGUAGES.map(([code, name]) => (
-                                <button
-                                    key={code}
-                                    onClick={() => setLang(code)}
-                                    className={`px-2.5 py-1 ${lang === code
-                                        ? "bg-primary-500 text-white"
-                                        : "bg-white text-gray-600 hover:bg-gray-50"
-                                        }`}
-                                >
-                                    {name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex-1 relative bg-white">
-                    {error && (
-                        <div className="bg-red-50 text-red-700 p-4 m-4 rounded-lg border-l-4 border-red-500 shadow-sm">
-                            <div className="flex items-center">
-                                <span className="text-xl mr-2">⚠️</span>
-                                <span className="font-medium">{t(error)}</span>
-                            </div>
-                        </div>
-                    )}
-
-                    {loading && (
-                        <div className="absolute inset-0 flex justify-center items-center bg-white/80 backdrop-blur-sm z-50 text-lg text-gray-600">
-                            <div className="text-center">
-                                <div className="text-2xl mb-4">🔄</div>
-                                <div className="font-semibold">
-                                    {t("loadingGraph")}
-                                </div>
-                                <div className="text-sm mt-2 text-gray-500">
-                                    {t("loadingHint")}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="flex h-[calc(100vh-71px)]">
-                        <GraphContainer
-                            hypergraph={hypergraph}
-                            data={viewData}
-                            viewRef={viewRef}
-                            viewOptions={viewOptions}
-                            selection={selection}
-                            onSelectionChange={onSelectionChange}
-                            pinned={!isEmptySelection(selection)}
-                            hiddenChips={hiddenChips}
-                            onRestore={(kind, id) =>
-                                setHidden((h) => ({
-                                    ...h,
-                                    [kind]: h[kind].filter((x) => x !== id),
-                                    faded: (h.faded || []).filter((x) => x !== id),
-                                }))
-                            }
-                            onRestoreAll={() => setHidden(EMPTY_HIDDEN)}
-                            setHoverHyperedge={setHoverHyperedge}
-                            setHoverNode={setHoverNode}
-                        />
-                        <InspectorPanel
-                            hypergraph={hypergraph}
-                            visibleHypergraph={visibleHypergraph}
-                            stats={stats}
-                            visibleStats={visibleStats}
-                            centerNode={selectedVertex}
-                            mode={visualizationMode}
-                            settings={renderSettings}
-                            setSettings={setRenderSettings}
-                            onResetSettings={() => setRenderSettings(DEFAULT_RENDER_SETTINGS)}
-                            colors={colors}
-                            selection={selection}
-                            setSelection={setSelection}
-                            hidden={hidden}
-                            setHidden={setHidden}
-                            onRowHover={onRowHover}
-                            onShowDetails={onShowDetails}
-                            focusId={focusId}
-                            hoverHyperedge={hoverHyperedge}
-                            hoverNode={hoverNode}
-                        />
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    return {
+        viewRef,
+        hypergraph,
+        visibleHypergraph,
+        centerNode: center,
+        mode: visualizationMode,
+        setMode: setVisualizationMode,
+        loading,
+        error,
+        lineCount,
+        hidden,
+        setHidden,
+        selection,
+        setSelection,
+        databaseProps: {
+            loadedHypergraph,
+            loadedStats,
+            vertexTypes,
+            setVertexTypes,
+            searchTerm,
+            setSearchTerm,
+            vertices,
+            loadingVertices,
+            selectedVertex,
+            setSelectedVertex,
+            pagination,
+            handlePageChange,
+            sortBy,
+            sortOrder,
+            onSort,
+            hyperedges: hyperedgeList,
+            hasHyperedgeList: !!source?.listHyperedges,
+            hyperedgeSearch,
+            setHyperedgeSearch,
+            onPickHyperedge,
+            selectedHyperedges: selection.hyperedges,
+            typeColorOf: colors.typeColorOf,
+        },
+        canvasProps: {
+            hypergraph,
+            data: viewData,
+            viewRef,
+            viewOptions,
+            selection,
+            onSelectionChange,
+            pinned: !isEmptySelection(selection),
+            hiddenChips,
+            onRestore: (kind, id) =>
+                setHidden((h) => ({
+                    ...h,
+                    [kind]: h[kind].filter((x) => x !== id),
+                    faded: (h.faded || []).filter((x) => x !== id),
+                })),
+            onRestoreAll: () => setHidden(EMPTY_HIDDEN),
+            setHoverHyperedge,
+            setHoverNode,
+        },
+        inspectorProps: {
+            hypergraph,
+            visibleHypergraph,
+            stats,
+            visibleStats,
+            centerNode: center,
+            mode: visualizationMode,
+            settings: renderSettings,
+            setSettings: setRenderSettings,
+            onResetSettings: () => setRenderSettings(renderDefaults),
+            colors,
+            selection,
+            setSelection,
+            hidden,
+            setHidden,
+            onRowHover,
+            onShowDetails,
+            focusId,
+            hoverHyperedge,
+            hoverNode,
+        },
+    };
 }

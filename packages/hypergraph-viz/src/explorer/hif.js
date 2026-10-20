@@ -35,21 +35,7 @@ const parseJSON = (content) => {
 export const parseHIF = async (content, filename = '') => {
     try {
         // Try to parse as JSON first
-        const data = parseJSON(content);
-
-        // Check if it's already in our internal format
-        if (data.database && data.vertices && data.graphs) {
-            return data;
-        }
-
-        // Check if it's a HIF format (could have different structure)
-        if (data.hypergraph || data.nodes || data.edges || data.hyperedges || Array.isArray(data.incidences)) {
-            return convertHIFToInternal(data);
-        }
-
-        // If it's a generic JSON, try to infer structure
-        return inferAndConvert(data);
-
+        return fromHIF(parseJSON(content));
     } catch (jsonError) {
         // If JSON parsing fails, try to parse as custom HIF format
         try {
@@ -58,6 +44,27 @@ export const parseHIF = async (content, filename = '') => {
             throw new Error(`Unable to parse file: ${filename}. JSON error: ${jsonError.message}, HIF error: ${hifError.message}`);
         }
     }
+};
+
+/**
+ * 已解析的 HIF（或其他超图 JSON）对象 → 内部格式（createLocalSource 的输入）
+ * Convert a parsed HIF (or other hypergraph JSON) object to the internal format taken by createLocalSource
+ * @param {Object} data - Parsed JSON
+ * @returns {Object} Internal format data
+ */
+export const fromHIF = (data) => {
+    // Check if it's already in our internal format
+    if (data.database && data.vertices && data.graphs) {
+        return data;
+    }
+
+    // Check if it's a HIF format (could have different structure)
+    if (data.hypergraph || data.nodes || data.edges || data.hyperedges || Array.isArray(data.incidences)) {
+        return convertHIFToInternal(data);
+    }
+
+    // If it's a generic JSON, try to infer structure
+    return inferAndConvert(data);
 };
 
 /**
