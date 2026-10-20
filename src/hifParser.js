@@ -9,10 +9,31 @@
  * @param {string} filename - Original filename for format detection
  * @returns {Promise<Object>} Parsed data in internal format
  */
+/**
+ * Parse JSON, tolerating the NaN / Infinity tokens that Python's json.dump writes by default
+ * (e.g. contacts_high_school.hif.json in HIF-standard); they become null.
+ * 只在严格解析失败时才替换，字符串里的 NaN 不受影响
+ * @param {string} content - JSON text
+ * @returns {Object} Parsed value
+ */
+const parseJSON = (content) => {
+    try {
+        return JSON.parse(content);
+    } catch (error) {
+        const lenient = content.replace(/"(?:[^"\\]|\\.)*"|-?\b(?:NaN|Infinity)\b/g, (m) => (m[0] === '"' ? m : 'null'));
+        if (lenient === content) throw error;
+        try {
+            return JSON.parse(lenient);
+        } catch {
+            throw error;
+        }
+    }
+};
+
 export const parseHIF = async (content, filename = '') => {
     try {
         // Try to parse as JSON first
-        const data = JSON.parse(content);
+        const data = parseJSON(content);
 
         // Check if it's already in our internal format
         if (data.database && data.vertices && data.graphs) {

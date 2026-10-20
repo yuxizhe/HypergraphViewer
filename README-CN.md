@@ -16,6 +16,7 @@
   - 缩放和平移功能
 - 📚 **示例数据集**（HIF 格式，在数据源卡片中切换；网址加 `?dataset=<id>` 可直接打开某一套）:
   - 神经学（医学）、英伟达超大规模云（金融）、三国演义、西游记、权力的游戏第一季
+- 🔗 **自己的 HIF 文件**：可加载远程网址或上传本地文件。网址加 `?url=<HIF 文件网址>` 可直接打开远程文件，例如 [HIF-standard 中的悲惨世界](https://yuxizhe.github.io/HypergraphViewer/?url=https%3A%2F%2Fraw.githubusercontent.com%2FHIF-org%2FHIF-standard%2Fmain%2Ftutorials%2Fdata%2Flesmis.hif.json)；文件所在服务器需允许跨域请求（GitHub raw 网址可以）。Python `json` 写出的 `NaN` / `Infinity` 按 `null` 读取
 - 🧭 **两侧面板**（可展开收起的卡片）:
   - 左侧：数据源、数据库统计、实体与超边列表（支持类型筛选）
   - 右侧：当前子图统计、实体 / 超边表（选择、显隐、改色）、渲染设置（布局、轮廓、节点大小）
