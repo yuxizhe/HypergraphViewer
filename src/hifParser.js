@@ -1,7 +1,9 @@
 /**
  * HIF (Hypergraph Interchange Format) Parser
- * Supports parsing both JSON and HIF format files
+ * Supports parsing both JSON and HIF format files, and Hypergraph-DB .hgdb files
  */
+import { hgdbToHIF } from './hgdb.js';
+import { looksLikePickle } from './pickle.js';
 
 /**
  * Parse HIF or JSON data and convert to internal format
@@ -365,6 +367,20 @@ export const validateHIFData = (data) => {
 };
 
 /**
+ * Parse file bytes: Hypergraph-DB .hgdb (pickle) or HIF / JSON text
+ * 按扩展名或 pickle 文件头识别 .hgdb；网址可能被改名，所以也看文件头
+ * @param {Uint8Array} bytes - File content
+ * @param {string} filename - Original filename
+ * @returns {Promise<Object>} Parsed data in internal format
+ */
+const parseBytes = async (bytes, filename) => {
+    if (/\.hgdb$/i.test(filename) || looksLikePickle(bytes)) {
+        return convertHIFToInternal(hgdbToHIF(bytes, filename.replace(/\.hgdb$/i, '')));
+    }
+    return parseHIF(new TextDecoder().decode(bytes), filename);
+};
+
+/**
  * Load and parse HIF from URL
  * @param {string} url - URL to fetch HIF data from
  * @returns {Promise<Object>} Parsed data
@@ -382,10 +398,10 @@ export const loadHIFFromURL = async (url) => {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
-        const content = await response.text();
-        const filename = url.split('/').pop() || 'remote_file';
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const filename = new URL(url, window.location.href).pathname.split('/').pop() || 'remote_file';
 
-        return await parseHIF(content, filename);
+        return await parseBytes(bytes, filename);
     } catch (error) {
         throw new Error(`Failed to load remote HIF file: ${error.message}`);
     }
@@ -402,8 +418,7 @@ export const loadHIFFromFile = async (file) => {
 
         reader.onload = async (e) => {
             try {
-                const content = e.target.result;
-                const data = await parseHIF(content, file.name);
+                const data = await parseBytes(new Uint8Array(e.target.result), file.name);
                 resolve(data);
             } catch (error) {
                 reject(new Error(`Failed to parse file: ${error.message}`));
@@ -414,7 +429,7 @@ export const loadHIFFromFile = async (file) => {
             reject(new Error('File reading failed'));
         };
 
-        reader.readAsText(file);
+        reader.readAsArrayBuffer(file);
     });
 };
 
