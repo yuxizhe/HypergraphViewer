@@ -4,9 +4,29 @@ Make every hypergraph viewable and readable.
 
 DEMO page: https://yuxizhe.github.io/HypergraphViewer/
 
-## Screenshots
-
 <img width="100%" alt="Hypergraph Viewer: database panel, hypergraph canvas and subgraph inspector" src="docs/images/screenshot.png" />
+
+## Features
+
+- 🕸️ **Hypergraph Layout**: a force-directed layout built for hypergraphs (`HypergraphLayout` in [hypergraph-viz](packages/hypergraph-viz)):
+  - Members of a hyperedge stay together, vertices outside it are pushed out of its contour, and hyperedges sharing more members sit closer
+  - The selected vertex sits at the center with its hyperedges arranged around it
+  - Hyperedges with 3+ members are drawn as contours around their nodes only (labels excluded), 2-member hyperedges as lines
+  - Overlapping labels are hidden until hover or selection by default; the layout can also make room for every label
+  - The same data always gives the same layout; force, ForceAtlas2 and circular layouts are also available in the Render panel
+- 🎨 **Interactive Interface**:
+  - Canvas: hover for detailed information, drag graph elements, zoom and pan
+  - Left panel: data source, database stats, vertex and hyperedge lists with type filters
+  - Right panel: subgraph stats, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)
+  - Panels are collapsible cards
+- 🗄️ **Hypergraph-DB files**: `.hgdb` databases saved by [Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) (`hg.save(...)`) can be uploaded or opened with `?url=`. The pickle is decoded in the browser without running any code; values that are Python objects (e.g. custom classes) are shown as `<module.Class>`
+- 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly; the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
+- 📝 **Details Panel**: Real-time display of hyperedge and node properties
+- 🎯 **Pagination**: Efficient handling of large datasets
+- 📚 **Sample Datasets** (HIF, switch in the data source card; `?dataset=<id>` in the URL selects one):
+  - Neurology (medical), NVIDIA hyperscale cloud (finance, Chinese), Romance of the Three Kingdoms, Journey to the West, Game of Thrones season 1
+
+## Screenshots
 
 ### Hyper-RAG
 
@@ -72,24 +92,6 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
 ```
 
 `@antv/g6` (5.0.x) is a peer dependency: the extensions are registered on the host project's G6, so keep a single copy of G6 in the project. See the [package README](packages/hypergraph-viz/README.md) for all options.
-
-## Features
-
-- 📊 **Dual Mode Visualization**:
-  - Hypergraph Mode: Displays hyperedges and bubble collections
-  - Graph Mode: Traditional node-edge graph visualization
-- 🎨 **Interactive Interface**:
-  - Mouse hover for detailed information
-  - Draggable graph elements
-  - Zoom and pan functionality
-- 📚 **Sample Datasets** (HIF, switch in the data source card; `?dataset=<id>` in the URL selects one):
-  - Neurology (medical), NVIDIA hyperscale cloud (finance, Chinese), Romance of the Three Kingdoms, Journey to the West, Game of Thrones season 1
-- 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly, e.g. [Les Misérables from HIF-standard](https://yuxizhe.github.io/HypergraphViewer/?url=https%3A%2F%2Fraw.githubusercontent.com%2FHIF-org%2FHIF-standard%2Fmain%2Ftutorials%2Fdata%2Flesmis.hif.json); the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
-- 🧭 **Side Panels** (collapsible cards):
-  - Left: data source, database stats, vertex and hyperedge lists with type filters
-  - Right: subgraph stats, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)
-- 📝 **Details Panel**: Real-time display of hyperedge and node properties
-- 🎯 **Pagination**: Efficient handling of large datasets
 
 ## Tech Stack
 
