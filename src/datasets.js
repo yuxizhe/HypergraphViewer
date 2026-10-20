@@ -16,10 +16,19 @@ export const DEFAULT_DATASET = DATASETS[0].id;
 export const datasetUrl = (id) => `${import.meta.env.BASE_URL}datasets/${id}.hif.json`;
 
 // 网址中 ?dataset= 指定的数据集（便于分享链接），无效时用默认数据集
-export const initialDataset = () => {
+const initialDataset = () => {
     const id = getUrlParam('dataset');
     return DATASETS.some((d) => d.id === id) ? id : DEFAULT_DATASET;
 };
 
-// 把当前数据集写入网址；非示例数据时去掉该参数
-export const rememberDataset = (id) => setUrlParam('dataset', id);
+// 初始数据源：?url= 指定的远程 HIF 文件优先，否则为 ?dataset= 指定的示例数据集
+export const initialSource = () => {
+    const url = getUrlParam('url');
+    return url ? { type: 'remote', url } : { type: 'static', dataset: initialDataset() };
+};
+
+// 把当前数据源写入网址：示例数据集写 dataset，远程文件写 url；本地文件无法分享，两者都去掉
+export const rememberSource = (source) => {
+    setUrlParam('dataset', source.type === 'static' ? source.dataset : null);
+    setUrlParam('url', source.type === 'remote' ? source.url : null);
+};

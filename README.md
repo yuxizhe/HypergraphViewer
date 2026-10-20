@@ -84,6 +84,7 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
   - Zoom and pan functionality
 - 📚 **Sample Datasets** (HIF, switch in the data source card; `?dataset=<id>` in the URL selects one):
   - Neurology (medical), NVIDIA hyperscale cloud (finance, Chinese), Romance of the Three Kingdoms, Journey to the West, Game of Thrones season 1
+- 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly, e.g. [Les Misérables from HIF-standard](https://yuxizhe.github.io/HypergraphViewer/?url=https%3A%2F%2Fraw.githubusercontent.com%2FHIF-org%2FHIF-standard%2Fmain%2Ftutorials%2Fdata%2Flesmis.hif.json); the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
 - 🧭 **Side Panels** (collapsible cards):
   - Left: data source, database stats, vertex and hyperedge lists with type filters
   - Right: subgraph stats, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)

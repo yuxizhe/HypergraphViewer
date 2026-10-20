@@ -9,7 +9,7 @@ import GraphContainer from './GraphContainer.jsx';
 import InspectorPanel from './panel/InspectorPanel.jsx';
 import { LANGUAGES, useI18n } from '../i18n.jsx';
 import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from '../viewSettings.js';
-import { DATASETS, initialDataset, rememberDataset } from '../datasets.js';
+import { DATASETS, initialSource, rememberSource } from '../datasets.js';
 
 // faded：隐藏的实体中“淡出”的部分（不参与布局，悬停、选中相关元素时在画布上显示与它们的关联），其余彻底隐藏
 const EMPTY_HIDDEN = { nodes: [], hyperedges: [], faded: [] };
@@ -54,7 +54,7 @@ export default function HypergraphViewer() {
     const [visualizationMode, setVisualizationMode] = useState("hyper");
     const [hoverHyperedge, setHoverHyperedge] = useState(null);
     const [hoverNode, setHoverNode] = useState(null);
-    const [currentDataSource, setCurrentDataSource] = useState(() => ({ type: 'static', dataset: initialDataset() }));
+    const [currentDataSource, setCurrentDataSource] = useState(initialSource);
     const [dataSourceLoading, setDataSourceLoading] = useState(false);
     const [dataSourceError, setDataSourceError] = useState("");
 
@@ -84,7 +84,7 @@ export default function HypergraphViewer() {
 
             if (result.success) {
                 setCurrentDataSource(newSource);
-                rememberDataset(newSource.type === 'static' ? newSource.dataset : null);
+                rememberSource(newSource);
 
                 // Refresh all data after successful data source change
                 setDataVersion((v) => v + 1);
