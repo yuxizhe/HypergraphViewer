@@ -1,12 +1,14 @@
-/* HypergraphExplorer 的样式：构建时由 scripts/build-css.mjs 编译 Tailwind 并把选择器限定在 .hv-root 下，输出 dist/style.css。
-   宿主不需要装 Tailwind；主色可在 .hv-root 上覆盖 --color-primary-50 / 500 / 600 / 700 */
+/* HypergraphExplorer 与 HypergraphAdmin 的样式：构建时由 scripts/build-css.mjs 编译 Tailwind 并把选择器限定在 .hv-root 下，输出 dist/style.css。
+   宿主不需要装 Tailwind；主色可在 .hv-root 上覆盖 --color-primary-50 / 100 / 500 / 600 / 700 */
 @import "tailwindcss/theme.css";
 @import "tailwindcss/preflight.css" layer(hv-base);
 @import "tailwindcss/utilities.css" source(none);
 @source "./";
+@source "../admin";
 
 @theme {
   --color-primary-50: #faf5ff;
+  --color-primary-100: #f3e8ff;
   --color-primary-500: #8b5cf6;
   --color-primary-600: #7c3aed;
   --color-primary-700: #6d28d9;

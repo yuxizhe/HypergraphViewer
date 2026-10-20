@@ -1,7 +1,7 @@
 {
   "name": "hypergraph-viz",
   "version": "0.2.0",
-  "description": "Hypergraph rendering on G6 v5: hypergraph layout, node-only bubble sets, hover and selection, plus an explorer UI with database and inspector panels",
+  "description": "Hypergraph rendering on G6 v5: hypergraph layout, node-only bubble sets, hover and selection, plus an explorer UI with database and inspector panels and an admin console",
   "license": "MIT",
   "author": "yuxizhe",
   "repository": {
@@ -54,6 +54,16 @@
         "default": "./dist/explorer.cjs"
       }
     },
+    "./admin": {
+      "import": {
+        "types": "./dist/admin.d.ts",
+        "default": "./dist/admin.js"
+      },
+      "require": {
+        "types": "./dist/admin.d.cts",
+        "default": "./dist/admin.cjs"
+      }
+    },
     "./global": "./dist/hypergraph-viz.global.js",
     "./style.css": "./dist/style.css"
   },
@@ -64,6 +74,9 @@
       ],
       "explorer": [
         "./dist/explorer.d.ts"
+      ],
+      "admin": [
+        "./dist/admin.d.ts"
       ]
     }
   },

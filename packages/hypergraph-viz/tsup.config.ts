@@ -18,7 +18,7 @@ module.exports = {
 
 export default defineConfig([
   {
-    entry: { index: 'src/index.ts', react: 'src/react.tsx', explorer: 'src/explorer.ts' },
+    entry: { index: 'src/index.ts', react: 'src/react.tsx', explorer: 'src/explorer.ts', admin: 'src/admin.ts' },
     format: ['esm', 'cjs'],
     dts: true,
     clean: true,
@@ -32,6 +32,8 @@ export default defineConfig([
     format: ['iife'],
     globalName: 'HypergraphViz',
     sourcemap: true,
+    // 经 CDN 直接加载，压缩体积
+    minify: true,
     esbuildPlugins: [
       {
         name: 'g6-global',
@@ -42,12 +44,13 @@ export default defineConfig([
       },
     ],
   },
-  // 面板全局版：React、ReactDOM、G6 都取页面上的全局变量（UMD 包）
+  // 面板全局版（超图浏览器与管理后台）：React、ReactDOM、G6 都取页面上的全局变量（UMD 包）
   {
     entry: { 'hypergraph-viz.explorer': 'src/explorer-global.ts' },
     format: ['iife'],
     globalName: 'HypergraphViz',
     sourcemap: true,
+    minify: true,
     // 不清空 dist：与上面两项并行构建
     clean: false,
     esbuildPlugins: [

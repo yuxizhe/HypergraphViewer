@@ -111,8 +111,28 @@ const source: HypergraphSource = {
 想自己排布局时，用 `useHypergraphExplorer(options)` 拿到 `databaseProps` / `canvasProps` / `inspectorProps`，
 分别交给 `DatabasePanel` / `GraphCanvas` / `InspectorPanel`。
 
-样式：主色可在 `.hv-root` 上覆盖 `--color-primary-50 / 500 / 600 / 700`。预置样式在 `@layer hv-base` 中，
+样式：主色可在 `.hv-root` 上覆盖 `--color-primary-50 / 100 / 500 / 600 / 700`。预置样式在 `@layer hv-base` 中，
 宿主用 Tailwind 4 时先引入本包样式，放进插槽的宿主组件可用自己的工具类覆盖它。
+
+## 管理后台
+
+`hypergraph-viz/admin` 是超图数据库的管理后台（与 Hypergraph-DB 的 `/admin` 相同）：概览统计、实体与超边的搜索和增删改查、HIF 导入 / 导出。
+
+```tsx
+import { createHttpAdminApi, HypergraphAdmin } from 'hypergraph-viz/admin';
+import 'hypergraph-viz/style.css';
+
+<HypergraphAdmin
+  api={createHttpAdminApi('/api/admin', { params: { database } })}   // Hypergraph-DB 管理后台的 HTTP 格式
+  viewerUrl="/viewer"                       // 可选：「超图可视化」页与实体详情中的查看器链接
+  headerExtra={<DatabaseSelect />}          // 顶栏右侧插槽
+  localeStorageKey="my-app-lang"            // 或 locale + onLocaleChange
+/>
+```
+
+数据接口见 `HypergraphAdminApi`：`save`、`exportHIF`、`importHIF`、`subgraph` 可省略，省略时不显示对应功能
+（没有 `save` 时每次修改即生效；有 `subgraph` 时实体详情中显示关系图）。后端不支持的功能从 `createHttpAdminApi` 的返回值中去掉即可，
+如 `const { save, ...api } = createHttpAdminApi(url)`。
 
 ## 不用框架
 
@@ -129,12 +149,13 @@ view.destroy();
 
 只用画布：先引入 G6 的 UMD 包（`window.G6`），再引入 `dist/hypergraph-viz.global.js`，全局变量为 `window.HypergraphViz`。
 
-带面板：依次引入 G6、React 18+、ReactDOM 的 UMD 包，再引入 `dist/hypergraph-viz.explorer.global.js` 与 `dist/style.css`：
+带面板（超图浏览器与管理后台）：依次引入 G6、React 18+、ReactDOM 的 UMD 包，再引入 `dist/hypergraph-viz.explorer.global.js` 与 `dist/style.css`：
 
 ```js
-const { mountExplorer } = window.HypergraphViz;
+const { mountExplorer, mountAdmin, createHttpAdminApi } = window.HypergraphViz;
 const explorer = mountExplorer(document.getElementById('root'), { source, localeStorageKey: 'my-app-lang' });
 explorer.update({ defaultCenter: 'STROKE' });   // 合并新的 props 重新渲染
+mountAdmin(document.getElementById('admin'), { api: createHttpAdminApi('/api/admin'), hashRouting: true });
 ```
 
 文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.0/dist/hypergraph-viz.explorer.global.js`
