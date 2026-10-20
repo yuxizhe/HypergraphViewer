@@ -159,8 +159,8 @@ explorer.update({ defaultCenter: 'STROKE' });   // 合并新的 props 重新渲�
 mountAdmin(document.getElementById('admin'), { api: createHttpAdminApi('/api/admin'), hashRouting: true });
 ```
 
-文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.0/dist/hypergraph-viz.explorer.global.js`
-与 `https://unpkg.com/hypergraph-viz@0.2.0/dist/style.css`。
+文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.1/dist/hypergraph-viz.explorer.global.js`
+与 `https://unpkg.com/hypergraph-viz@0.2.1/dist/style.css`。
 
 ## 只用其中一部分
 

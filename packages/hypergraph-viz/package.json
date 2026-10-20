@@ -1,6 +1,6 @@
 {
   "name": "hypergraph-viz",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Hypergraph rendering on G6 v5: hypergraph layout, node-only bubble sets, hover and selection, plus an explorer UI with database and inspector panels and an admin console",
   "license": "MIT",
   "author": "yuxizhe",
