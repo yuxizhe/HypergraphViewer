@@ -19,12 +19,12 @@ DEMO page: https://yuxizhe.github.io/HypergraphViewer/
   - Left panel: data source, database stats, vertex and hyperedge lists with type filters
   - Right panel: subgraph stats, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)
   - Panels are collapsible cards
+- 🗄️ **Hypergraph-DB files**: `.hgdb` databases saved by [Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) (`hg.save(...)`) can be uploaded or opened with `?url=`. The pickle is decoded in the browser without running any code; values that are Python objects (e.g. custom classes) are shown as `<module.Class>`
+- 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly; the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
 - 📱 **Phones and tablets**: the layout follows the viewer's own width (see [screenshots](#phones-and-tablets)):
   - Desktop (≥ 1200 px): three columns
   - Tablet (768–1199 px): the canvas fills the width; the left panel slides in as a drawer and the right panel floats over the canvas
   - Phone (< 768 px): the canvas fills the screen; Vertices / Subgraph / Details open as bottom sheets (half height to keep the graph in view, drag up for full height); tap a vertex or hyperedge to see its details
-- 🗄️ **Hypergraph-DB files**: `.hgdb` databases saved by [Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) (`hg.save(...)`) can be uploaded or opened with `?url=`. The pickle is decoded in the browser without running any code; values that are Python objects (e.g. custom classes) are shown as `<module.Class>`
-- 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly; the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
 - 📝 **Details Panel**: Real-time display of hyperedge and node properties
 - 🎯 **Pagination**: Efficient handling of large datasets
 - 📚 **Sample Datasets** (HIF, switch in the data source card; `?dataset=<id>` in the URL selects one):
