@@ -21,12 +21,20 @@ DEMO page: https://yuxizhe.github.io/HypergraphViewer/
   - Panels are collapsible cards
 - 🗄️ **Hypergraph-DB files**: `.hgdb` databases saved by [Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) (`hg.save(...)`) can be uploaded or opened with `?url=`. The pickle is decoded in the browser without running any code; values that are Python objects (e.g. custom classes) are shown as `<module.Class>`
 - 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly; the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
+- 📱 **Phones and tablets**: the layout follows the viewer's own width (see [screenshots](#phones-and-tablets)):
+  - Desktop (≥ 1200 px): three columns
+  - Tablet (768–1199 px): the canvas fills the width; the left panel slides in as a drawer and the right panel floats over the canvas
+  - Phone (< 768 px): the canvas fills the screen; Vertices / Subgraph / Details open as bottom sheets (half height to keep the graph in view, drag up for full height); tap a vertex or hyperedge to see its details
 - 📝 **Details Panel**: Real-time display of hyperedge and node properties
 - 🎯 **Pagination**: Efficient handling of large datasets
 - 📚 **Sample Datasets** (HIF, switch in the data source card; `?dataset=<id>` in the URL selects one):
   - Neurology (medical), NVIDIA hyperscale cloud (finance, Chinese), Romance of the Three Kingdoms, Journey to the West, Game of Thrones season 1
 
 ## Screenshots
+
+### Phones and tablets
+
+<img width="100%" alt="Hypergraph Viewer on a phone: canvas, vertex list and subgraph panels as bottom sheets" src="docs/images/mobile.png" />
 
 ### Hyper-RAG
 
@@ -85,7 +93,7 @@ In a plain HTML page, load G6's UMD build first, then the `<script>` build:
 
 ```html
 <script src="https://unpkg.com/@antv/g6@5.0.49/dist/g6.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/hypergraph-viz@0.2.0/dist/hypergraph-viz.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hypergraph-viz@0.2.1/dist/hypergraph-viz.global.js"></script>
 <script>
   const view = HypergraphViz.createHypergraphView(document.getElementById('graph'), { data });
 </script>

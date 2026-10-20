@@ -88,6 +88,7 @@ import 'hypergraph-viz/style.css';   // 选择器都限定在 .hv-root 下，宿
   source={createLocalSource(fromHIF(hif))}   // 换一个 source 对象即重新载入
   defaultCenter="STROKE"
   panels={{ database: true, inspector: true, header: true }}
+  layout="auto"                              // 按自身宽度：≥ 1200 三栏；≥ 768 左栏抽屉、右栏浮层；更窄（手机）面板从底部弹出
   localeStorageKey="my-app-lang"             // 浏览器自己管理语言：记住选择，标题栏可切换；或传 locale + onLocaleChange 由宿主管理
   messages={{ zh: { neighborhoodCol: '度数' } }}   // 覆盖或补充界面文字
   defaultRenderSettings={{ autoHideDegree: 0 }}   // 「渲染」设置的默认值；0 表示不自动隐藏高度数实体（默认隐藏度数 > 30 的）
@@ -158,8 +159,8 @@ explorer.update({ defaultCenter: 'STROKE' });   // 合并新的 props 重新渲�
 mountAdmin(document.getElementById('admin'), { api: createHttpAdminApi('/api/admin'), hashRouting: true });
 ```
 
-文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.0/dist/hypergraph-viz.explorer.global.js`
-与 `https://unpkg.com/hypergraph-viz@0.2.0/dist/style.css`。
+文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.1/dist/hypergraph-viz.explorer.global.js`
+与 `https://unpkg.com/hypergraph-viz@0.2.1/dist/style.css`。
 
 ## 只用其中一部分
 

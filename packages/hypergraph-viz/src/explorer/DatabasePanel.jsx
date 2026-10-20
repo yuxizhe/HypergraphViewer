@@ -37,7 +37,8 @@ const Bar = ({ value, max }) => (
 const toggleIn = (list, type) => (list.includes(type) ? list.filter((x) => x !== type) : [...list, type]);
 
 // 左侧栏：宿主的插槽（如数据源选择）、已载入超图的统计、实体列表（点选切换中心实体）、超边列表（点选跳到含该超边的子图并选中）；
-// 实体、超边列表均可按类型筛选。title：栏顶标题，不传时不显示；header：插在统计卡片之前（可用 Section 做成同样的卡片）
+// 实体、超边列表均可按类型筛选。title：栏顶标题，不传时不显示；header：插在统计卡片之前（可用 Section 做成同样的卡片）；
+// fill：撑满所在容器（抽屉、底部面板中），否则为 320px 宽的侧栏
 const DatabasePanel = ({
     title,
     header,
@@ -64,6 +65,7 @@ const DatabasePanel = ({
     selectedHyperedges,
     typeColorOf,
     className = "",
+    fill = false,
 }) => {
     const { t } = useI18n();
     const [open, setOpen] = useState({ stats: true, nodes: true, hyperedges: false });
@@ -123,7 +125,9 @@ const DatabasePanel = ({
     );
 
     return (
-        <div className={`w-80 h-full bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl shrink-0 flex flex-col ${className}`}>
+        <div
+            className={`h-full flex flex-col ${fill ? "w-full bg-white" : "w-80 shrink-0 bg-white/95 backdrop-blur-sm border-r border-gray-200/50 shadow-xl"} ${className}`}
+        >
             {title && (
                 <h2 className="text-xl font-bold text-gray-800 px-3 py-3 border-b border-gray-200 shrink-0">
                     {title}

@@ -47,6 +47,11 @@ export interface HypergraphExplorerProps extends ExplorerOptions {
   /** 面板开关：database 左栏（需 source），inspector 右栏，header 标题栏；默认都开 / toggle panels, all on by default */
   panels?: { database?: boolean; inspector?: boolean; header?: boolean };
   /**
+   * 布局，默认 'auto' 按浏览器自身宽度：≥ 1200 三栏（wide），≥ 768 画布占满、左栏抽屉、右栏浮层（medium），
+   * 更窄时画布全屏、面板从底部弹出（compact，手机）/ layout, chosen from the explorer's own width by default
+   */
+  layout?: 'auto' | 'wide' | 'medium' | 'compact';
+  /**
    * 界面语言；不传时由浏览器自己管理：初始为 localeStorageKey 记住的或浏览器语言，标题栏显示语言切换 /
    * UI language; when omitted the explorer manages it (remembered under localeStorageKey, else the browser's) and shows the switch
    */
