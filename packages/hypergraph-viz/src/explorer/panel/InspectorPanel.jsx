@@ -13,7 +13,7 @@ const hyperedgeName = (item, members) =>
 
 // 右侧面板：当前子图的统计、实体 / 超边表（选择、显隐、颜色）、渲染设置，各为一张可收起的卡片；
 // 实体、超边默认展开并分享剩余高度，渲染、详情默认收起
-// 整个面板（文字、表格、间距）缩小 10%，给画布多留空间
+// 侧栏时整个面板（文字、表格、间距）缩小 10%，给画布多留空间；手机上的底部面板不缩小
 const PANEL_ZOOM = { zoom: 0.9 };
 
 const InspectorPanel = ({
@@ -36,6 +36,11 @@ const InspectorPanel = ({
     focusId,
     hoverHyperedge,
     hoverNode,
+    // fill：撑满所在容器（浮层、底部面板中）；onCollapse：收起按钮交给外层（不传时收起成右侧窄条）；
+    // compact：手机上的底部面板（不缩小、没有标题行与详情区，详情在单独的面板中）
+    fill = false,
+    onCollapse,
+    compact = false,
 }) => {
     const { t } = useI18n();
     const [open, setOpen] = useState({ stats: true, nodes: true, hyperedges: true, render: false });
@@ -208,17 +213,22 @@ const InspectorPanel = ({
     const counts = { nodes: stats?.vertexCount ?? 0, hyperedges: stats?.members.size ?? 0 };
 
     return (
-        <div className="shrink-0 w-96 h-full flex flex-col bg-white/95 backdrop-blur-sm border-l border-gray-200/50 shadow-xl" style={PANEL_ZOOM}>
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0">
-                <span className="text-base font-bold text-gray-800">{t("panelTitle")}</span>
-                <button
-                    onClick={() => setCollapsed(true)}
-                    className="hover:[&>svg]:text-primary-600"
-                    title={t("collapsePanel")}
-                >
-                    <Chevron dir="right" />
-                </button>
-            </div>
+        <div
+            className={`h-full flex flex-col ${fill ? "w-full bg-white" : "shrink-0 w-96 bg-white/95 backdrop-blur-sm border-l border-gray-200/50 shadow-xl"}`}
+            style={compact ? undefined : PANEL_ZOOM}
+        >
+            {!compact && (
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 shrink-0">
+                    <span className="text-base font-bold text-gray-800">{t("panelTitle")}</span>
+                    <button
+                        onClick={onCollapse ?? (() => setCollapsed(true))}
+                        className="hover:[&>svg]:text-primary-600"
+                        title={t("collapsePanel")}
+                    >
+                        <Chevron dir="right" />
+                    </button>
+                </div>
+            )}
 
             <div className="flex-1 min-h-0 overflow-y-auto flex flex-col">
                 {!stats ? (
@@ -332,21 +342,23 @@ const InspectorPanel = ({
                 </div>
             )}
 
-            <div className={`border-t-2 border-primary-500 flex flex-col shrink-0 ${detailsOpen ? "h-[38%] min-h-40" : ""}`}>
-                <button
-                    onClick={() => setDetailsOpen((o) => !o)}
-                    aria-expanded={detailsOpen}
-                    className="flex items-center justify-between px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-50"
-                >
-                    {t("detail")}
-                    <Chevron open={detailsOpen} />
-                </button>
-                {detailsOpen && (
-                    <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
-                        <DetailsPanel hoverHyperedge={hoverHyperedge} hoverNode={hoverNode} />
-                    </div>
-                )}
-            </div>
+            {!compact && (
+                <div className={`border-t-2 border-primary-500 flex flex-col shrink-0 ${detailsOpen ? "h-[38%] min-h-40" : ""}`}>
+                    <button
+                        onClick={() => setDetailsOpen((o) => !o)}
+                        aria-expanded={detailsOpen}
+                        className="flex items-center justify-between px-3 py-2 text-sm font-bold text-gray-800 hover:bg-gray-50"
+                    >
+                        {t("detail")}
+                        <Chevron open={detailsOpen} />
+                    </button>
+                    {detailsOpen && (
+                        <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-3">
+                            <DetailsPanel hoverHyperedge={hoverHyperedge} hoverNode={hoverNode} />
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 };

@@ -3,8 +3,11 @@ import { useEffect, useState } from 'react';
 import type { HypergraphView as View } from './view';
 
 export interface ToolbarOptions {
-  /** 'small'：小号（按钮更小、贴边，平时半透明，全屏时恢复正常大小），用于小画布 / compact variant for small canvases */
-  size?: 'default' | 'small';
+  /**
+   * 'small'：小号（按钮更小、贴边，平时半透明，全屏时恢复正常大小），用于小画布；'large'：大号，便于手指点按 /
+   * compact variant for small canvases, or large buttons for touch screens
+   */
+  size?: 'default' | 'small' | 'large';
   /** 按钮提示文字的语言，默认英文 / language of the button titles, English by default */
   locale?: 'en' | 'zh';
   /** 全屏按钮：false 不显示；默认让视图所在的容器全屏，也可指定更大的元素（如连同宿主的浮层）/ element to make full screen, false to hide the button */
@@ -28,10 +31,12 @@ const ICONS = {
 type Icon = keyof typeof ICONS;
 
 // 样式全部内联：只用画布的宿主不需要引入样式表
-const ToolButton = ({ icon, title, onClick, small, first }: { icon: Icon; title: string; onClick: () => void; small: boolean; first: boolean }) => {
+type ButtonSize = 'small' | 'default' | 'large';
+const BUTTON_SIZES: Record<ButtonSize, [number, number]> = { small: [22, 14], default: [32, 18], large: [40, 20] };
+
+const ToolButton = ({ icon, title, onClick, size: variant, first }: { icon: Icon; title: string; onClick: () => void; size: ButtonSize; first: boolean }) => {
   const [hover, setHover] = useState(false);
-  const size = small ? 22 : 32;
-  const iconSize = small ? 14 : 18;
+  const [size, iconSize] = BUTTON_SIZES[variant];
   return (
     <button
       type="button"
@@ -75,25 +80,47 @@ export const Toolbar = ({
 }) => {
   const titles = TITLES[options.locale === 'zh' ? 'zh' : 'en'];
   // 视图换数据重新挂载时，全屏可能仍在进行
-  const [fullscreen, setFullscreen] = useState(() => !!target?.current && document.fullscreenElement === target.current);
+  const [fullscreen, setFullscreen] = useState(
+    () => !!target?.current && (document.fullscreenElement === target.current || target.current.dataset.hvFullscreen === 'page'),
+  );
   const [hover, setHover] = useState(false);
+  const refit = () => setTimeout(() => viewRef.current?.fitView(false), 100);
   useEffect(() => {
     const onChange = () => {
       setFullscreen(!!target?.current && document.fullscreenElement === target.current);
       // 进出全屏后画布尺寸变化，重新撑满
-      setTimeout(() => viewRef.current?.fitView(false), 100);
+      refit();
     };
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewRef, target]);
   const toggleFullscreen = () => {
+    const el = target?.current;
+    if (!el) return;
     if (document.fullscreenElement) document.exitFullscreen();
-    else target?.current?.requestFullscreen?.();
+    else if (document.fullscreenEnabled && el.requestFullscreen) el.requestFullscreen();
+    else {
+      // 不支持全屏 API（如 iPhone 上的 Safari）：把元素铺满页面代替
+      const on = el.dataset.hvFullscreen !== 'page';
+      if (on) {
+        el.dataset.hvFullscreen = 'page';
+        el.dataset.hvStyle = el.getAttribute('style') ?? '';
+        Object.assign(el.style, { position: 'fixed', inset: '0', zIndex: '2147483000', background: '#fff' });
+      } else {
+        delete el.dataset.hvFullscreen;
+        el.setAttribute('style', el.dataset.hvStyle ?? '');
+        delete el.dataset.hvStyle;
+      }
+      setFullscreen(on);
+      refit();
+    }
   };
   const zoom = (ratio: number) => viewRef.current?.graph.zoomBy(ratio, { duration: 200 });
 
   // 小号平时半透明，指针移上去才完全显示，少挡住小画布；全屏时恢复正常大小
   const small = options.size === 'small' && !fullscreen;
+  const buttonSize: ButtonSize = small ? 'small' : options.size === 'large' ? 'large' : 'default';
   const offset = options.size === 'small' ? 4 : 8;
   const style: CSSProperties = {
     position: 'absolute',
@@ -120,7 +147,7 @@ export const Toolbar = ({
   return (
     <div style={style} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {buttons.map(([icon, title, onClick], i) => (
-        <ToolButton key={icon} icon={icon} title={title} onClick={onClick} small={small} first={i === 0} />
+        <ToolButton key={icon} icon={icon} title={title} onClick={onClick} size={buttonSize} first={i === 0} />
       ))}
     </div>
   );

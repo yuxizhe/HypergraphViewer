@@ -34,12 +34,16 @@ const MAX_CHIPS = 12;
 // 子图编号：换子图时视图以新的 key 重新挂载
 let graphSeq = 0;
 
-// 画布下方的「已隐藏」标签条：点 × 恢复单个，「全部恢复」清空。淡出的实体为虚线框
-const HiddenChips = ({ chips, onRestore, onRestoreAll }) => {
+// 画布下方的「已隐藏」标签条：点 × 恢复单个，「全部恢复」清空。淡出的实体为虚线框；compact（手机）时为可左右滑动的一行
+const HiddenChips = ({ chips, onRestore, onRestoreAll, compact }) => {
     const { t } = useI18n();
     if (!chips.length) return null;
     return (
-        <div className="absolute bottom-2 left-2 right-2 z-10 flex flex-wrap items-center gap-1 text-xs pointer-events-none">
+        <div
+            className={`absolute bottom-2 left-2 right-2 z-10 flex items-center gap-1 text-xs ${
+                compact ? "flex-nowrap overflow-x-auto whitespace-nowrap [&>*]:shrink-0" : "flex-wrap pointer-events-none"
+            }`}
+        >
             <span className="px-1.5 py-0.5 rounded bg-gray-800/80 text-white pointer-events-auto">{t("hiddenLabel")}</span>
             {chips.slice(0, MAX_CHIPS).map((c) => (
                 <span
@@ -85,7 +89,8 @@ const GraphContainer = ({
     onRestore,
     onRestoreAll,
     setHoverHyperedge,
-    setHoverNode
+    setHoverNode,
+    compact = false,
 }) => {
     const [tip, setTip] = useState(null);
     const { lang } = useI18n();
@@ -130,10 +135,10 @@ const GraphContainer = ({
                     onHover={onHover}
                     onSelectionChange={onSelectionChange}
                     // 全屏：整个画布区域（含悬停卡片、已隐藏标签条）进入全屏
-                    toolbar={{ locale: lang, fullscreen: rootRef }}
+                    toolbar={{ locale: lang, fullscreen: rootRef, size: compact ? "large" : "default" }}
                 />
             )}
-            <HiddenChips chips={hiddenChips} onRestore={onRestore} onRestoreAll={onRestoreAll} />
+            <HiddenChips chips={hiddenChips} onRestore={onRestore} onRestoreAll={onRestoreAll} compact={compact} />
             {tip && (
                 <HoverTip
                     title={tip.title}
