@@ -184,6 +184,9 @@ export interface HypergraphLayoutOptions extends BaseLayoutOptions {
 }
 
 const ALPHA_MIN = 0.001;
+/** 每隔多少次迭代送回困在别的超边里的节点，及其截止的 alpha / how often stranded nodes are sent back, and the alpha it stops at */
+const RESCUE_INTERVAL = 20;
+const RESCUE_ALPHA = 0.02;
 
 /** 超边中心（虚拟点） / Hyperedge center (virtual node) */
 interface Hub {
@@ -231,6 +234,8 @@ interface Simulation {
   cy: number;
   alpha: number;
   alphaDecay: number;
+  /** 已执行的迭代次数 / iterations run so far */
+  ticks: number;
 }
 
 /**
@@ -589,6 +594,7 @@ function initSimulation(model: GraphData, options: HypergraphLayoutOptions): Sim
     cy,
     alpha: 1,
     alphaDecay: 1 - Math.pow(ALPHA_MIN, 1 / Math.max(1, iterations)),
+    ticks: 0,
   };
 }
 
@@ -735,6 +741,12 @@ function step(sim: Simulation, options: HypergraphLayoutOptions) {
 
   // ③ 非成员排斥：将非成员推出超边成员的凸包（外扩 margin），即 bubble-sets 轮廓所在区域
   // exclusion: push non-members out of the members' convex hull grown by a margin, where the bubble-sets contour lies
+  // 每隔若干次迭代，把困在别的超边凸包里、只属于一条超边的节点直接送回自己的超边中心旁。
+  // 否则它被推向最近的凸包边，可能是远离自己超边的一侧，随后两条超边的轮廓交缠成环
+  // Every few iterations, a node of a single hub caught inside another hub's hull is moved straight back next to
+  // its own hub center. Otherwise it is pushed towards the nearest hull edge, possibly away from its own hub, and
+  // the two contours end up tangled into a ring
+  const rescue = sim.ticks++ % RESCUE_INTERVAL === RESCUE_INTERVAL - 1 && alpha > RESCUE_ALPHA;
   const mark = new Int32Array(n);
   const margin = spacing * 0.75;
   hubs.forEach((hub, h) => {
@@ -761,6 +773,16 @@ function step(sim: Simulation, options: HypergraphLayoutOptions) {
       if (mark[v] === h + 1 || sharesParent(v, hubParents[h])) return;
       const [distance, nx, ny] = signedDistance(polygon, x[v], y[v]);
       if (distance >= margin) return;
+      if (rescue && distance < 0 && v !== fixed && hubsOf[v].length === 1) {
+        const own = hubs[hubsOf[v][0]];
+        const dx = x[v] - own.x;
+        const dy = y[v] - own.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        x[v] = own.x + (dx / d) * own.rest * 0.3;
+        y[v] = own.y + (dy / d) * own.rest * 0.3;
+        vx[v] = vy[v] = 0;
+        return;
+      }
       const f = (margin - distance) * exclusion * Math.max(alpha, 0.1) * 0.5;
       vx[v] += nx * f * 0.8;
       vy[v] += ny * f * 0.8;
