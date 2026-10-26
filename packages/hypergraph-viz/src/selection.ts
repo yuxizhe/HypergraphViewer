@@ -36,7 +36,7 @@ export interface SelectionStyles {
  * Hovered vertices, members and lines of hovered hyperedges get 'active', hovered contours are highlighted
  */
 export const selectionStyles = (
-  spec: Pick<HypergraphSpec, 'data' | 'hyperedges' | 'lineHyperedges'>,
+  spec: Pick<HypergraphSpec, 'data' | 'hyperedges' | 'lineHyperedges'> & Partial<Pick<HypergraphSpec, 'hyperedgeNodes'>>,
   selection: Partial<Selection> = EMPTY_SELECTION,
   hover?: Partial<Selection> | null,
 ): SelectionStyles => {
@@ -63,6 +63,13 @@ export const selectionStyles = (
 
   const states: Record<ID, string[]> = {};
   spec.data.nodes!.forEach((n) => {
+    // 超边节点（graphEdges: 'star'）随它的超边：同连线
+    const owner = spec.hyperedgeNodes?.get(n.id);
+    if (owner !== undefined) {
+      const s = !active ? [] : selEdges.has(owner) ? ['highlight'] : related.has(owner) ? [] : ['inactive'];
+      states[n.id] = hoverEdges.has(owner) ? [...s, 'active'] : s;
+      return;
+    }
     const s = !active ? [] : highlightNodes.has(n.id) ? ['highlight'] : normalNodes.has(n.id) ? [] : ['inactive'];
     states[n.id] = hoverNodes.has(n.id) ? [...s, 'active'] : s;
   });

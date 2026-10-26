@@ -11,9 +11,11 @@ export { HYPERGRAPH_LAYOUT, registerHypergraph } from './register';
 export type { BubbleLevel, Selection, SelectionStyles } from './selection';
 export { EMPTY_SELECTION, isEmptySelection, nextSelection, selectionStyles } from './selection';
 export type { HyperedgeItem, HypergraphData, HypergraphMode, HypergraphSpec, LayoutSettings, SpecOptions } from './spec';
-export { bubbleKeyOf, pairId, toG6Spec } from './spec';
+export { bubbleKeyOf, hyperedgeNodeId, pairId, toG6Spec } from './spec';
 export type { BubbleState, HypergraphTheme } from './theme';
 export { DEFAULT_THEME, resolveTheme, typeColorsOf } from './theme';
+export type { IncidenceMatrix, MatrixColumn, MatrixOptions, MatrixOrder } from './matrix';
+export { incidenceMatrix } from './matrix';
 export type { HypergraphHit, HypergraphView, ViewOptions } from './view';
 export { createHypergraphView } from './view';
 export type {

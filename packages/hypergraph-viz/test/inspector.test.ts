@@ -290,3 +290,18 @@ describe('placeFaded', () => {
     expect(Math.hypot(pos.x, pos.y)).toBeLessThan(60);
   });
 });
+
+describe('fadedNodes 与图模式 binary', () => {
+  it('binary 去掉的实体不再有淡出实体的虚线', () => {
+    // hub 淡出后第一条只剩 p（虚线 hub → p）；p 另外只在 3 元超边中，binary 下被去掉
+    const graph: HypergraphData = {
+      vertices: { hub: {}, p: {}, q: {}, r: {} },
+      hyperedges: [{ members: ['hub', 'p'] }, { members: ['p', 'q', 'r'] }, { members: ['q', 'r'] }],
+    };
+    const all = toG6Spec(graph, { mode: 'graph', graphEdges: 'clique', fadedNodes: ['hub'] });
+    expect(all.faded.links.map((l) => l.target)).toEqual(['p']);
+    const spec = toG6Spec(graph, { mode: 'graph', graphEdges: 'binary', fadedNodes: ['hub'] });
+    expect(spec.data.nodes!.map((n) => n.id).sort()).toEqual(['q', 'r']);
+    expect(spec.faded.links).toEqual([]);
+  });
+});

@@ -56,6 +56,32 @@ const colors = hyperedgeColorsOf(graph);                       // 在完整数�
 />
 ```
 
+### 图模式与二部图
+
+`mode="graph"` 只画连线、力导布局。3 个及以上成员的超边由 `graphEdges` 决定：`'binary'`（默认）丢弃，`'clique'` 拆成两两连线，
+`'star'` 画成一个菱形的超边节点、连向各成员（二部图 / 关联图，同 SimpleHypergraphs.jl、HAT 的画法）。超边节点与连线用该超边的颜色，
+悬停、点击时按超边报告（`kind: 'hyperedge'`），选中、表格行悬停的高亮与轮廓一致。超边节点的 id 为 `hyperedgeNodeId(超边 id)`。
+
+### 关联矩阵
+
+```tsx
+import { IncidenceMatrixView } from 'hypergraph-viz/react';
+
+<IncidenceMatrixView
+  data={graph}
+  order="degree"                     // 'degree' 按度数 | 'type' 按类型分组 | 'cluster' 重心法聚类
+  hyperedgeColors={colors}
+  hubNodes={fadedIds}                // 行首画虚线圈，如画布上淡出的枢纽
+  selection={selection}
+  onSelectionChange={(selection, { additive, hit }) => ...}  // 点行选实体、点列选超边，Shift 增删，点左上角取消
+  onHover={(hit) => ...}             // 与 HypergraphView 相同的命中格式
+  toolbar                            // 放大、缩小（单元格大小）、适应、全屏
+/>
+```
+
+一行一个实体、一列一条超边（含 2 元超边），成员处画点并用竖线连起（参考 HAT 的 incidence plot）。枢纽实体只是满格的一行，不会像画布那样把超边挤成一团。
+行、列标题在滚动时固定；`ref` 提供 `hover` / `select` / `fitView` / `zoomBy`。只要排序结果可用 `incidenceMatrix(data, { order })`。
+
 ### 标签、悬停与视口
 
 ```tsx

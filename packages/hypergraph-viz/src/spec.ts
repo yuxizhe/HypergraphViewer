@@ -55,10 +55,12 @@ export interface SpecOptions {
   /** 类型 → 颜色；不传时按本图中出现的类型从 theme.typePalette 依次取色 / type → color */
   typeColors?: Record<string, string>;
   /**
-   * 图模式下 3 个及以上成员的超边：'binary' 丢弃（并去掉没有连线的顶点），'clique' 拆成两两连线
-   * In graph mode, hyperedges with 3+ members are dropped ('binary', isolated vertices removed too) or expanded into pairwise lines ('clique')
+   * 图模式下 3 个及以上成员的超边：'binary' 丢弃（并去掉没有连线的顶点），'clique' 拆成两两连线，
+   * 'star' 画成一个超边节点、连向各成员（二部图 / 关联图）
+   * In graph mode, hyperedges with 3+ members are dropped ('binary', isolated vertices removed too), expanded into pairwise lines ('clique'),
+   * or drawn as a hyperedge node linked to each member ('star', the bipartite incidence graph)
    */
-  graphEdges?: 'binary' | 'clique';
+  graphEdges?: 'binary' | 'clique' | 'star';
   /** 节点标签，默认为 id / node label, defaults to the id */
   labelText?: (node: NodeData) => string;
   theme?: Partial<HypergraphTheme>;
@@ -119,6 +121,8 @@ export type HypergraphSpec = Required<Pick<GraphOptions, 'data' | 'node' | 'edge
    * vertex → the hyperedges it is the only drawn member of (full members)
    */
   faded: { nodes: NodeData[]; links: FadedLink[]; members: Map<ID, ID[]>; dropped: Map<ID, HyperedgeItem[]> };
+  /** 超边节点 id → 超边 id（graphEdges: 'star'）/ hyperedge node id → hyperedge id, with graphEdges: 'star' */
+  hyperedgeNodes: Map<ID, ID>;
 };
 
 /** 淡出实体虚线的 id / id of a faded vertex's dashed link */
@@ -127,6 +131,12 @@ export const fadedLinkId = (faded: ID, node: ID) => `faded:${faded}->${node}`;
 // 2 元超边 / 拆出的连线的 id：两端按字典序拼接
 const PAIR_SEP = '|#|';
 export const pairId = (a: ID, b: ID) => (a < b ? `${a}${PAIR_SEP}${b}` : `${b}${PAIR_SEP}${a}`);
+
+/** 超边节点的 id（graphEdges: 'star'）/ id of a hyperedge node with graphEdges: 'star' */
+export const hyperedgeNodeId = (id: ID) => `hyperedge:${id}`;
+
+// 超边节点到成员的连线 id
+const starLinkId = (id: ID, member: ID) => `hyperedge:${id}->${member}`;
 
 /** 3 个及以上成员的超边对应的轮廓插件 key / key of the contour plugin of a hyperedge with 3+ members */
 export const bubbleKeyOf = (id: ID) => `bubble-sets-${id}`;
@@ -185,6 +195,10 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   };
 
   const hyperedges = new Map<ID, HyperedgeItem & { id: ID }>();
+  const hyperedgeNodes = new Map<ID, ID>();
+  const starNodes: NodeData[] = [];
+  // 超边 id → 超边节点及其连线的颜色；样式里按 id 查，只改颜色时重绘即可
+  const starColors = new Map<ID, string>();
   const layoutHyperedges: { id: ID; weight: number; members: ID[] }[] = [];
   const plugins: { type: string; key: string; [key: string]: any }[] = [];
 
@@ -223,6 +237,16 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
         for (let a = 0; a < members.length; a++) {
           for (let b = a + 1; b < members.length; b++) pushLine(members[a], members[b], attrs, id);
         }
+      } else if (graphEdges === 'star') {
+        const nodeId = hyperedgeNodeId(id);
+        hyperedgeNodes.set(nodeId, id);
+        starColors.set(id, options.hyperedgeColors?.[id] ?? theme.hyperedgeColors[i % theme.hyperedgeColors.length]);
+        starNodes.push({ ...attrs, id: nodeId, hyperedge: id, memberCount: members.length });
+        members.forEach((m) => {
+          const linkId = starLinkId(id, m);
+          lineHyperedges.set(linkId, [id]);
+          edges.push({ id: linkId, source: nodeId, target: m });
+        });
       }
       return;
     }
@@ -250,6 +274,8 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       connected.add(e.target);
     });
     nodes = nodes.filter((n) => connected.has(n.id));
+  } else if (isGraph && graphEdges === 'star') {
+    nodes = [...nodes, ...starNodes];
   } else if (!isGraph) {
     // 每个顶点取所属权重最大的超边作为聚类（调色板分组）
     const clusterOf = new Map<ID, { id: ID; weight: number }>();
@@ -265,6 +291,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     });
   }
 
+  const drawnIds = new Set(nodes.map((n) => n.id));
   const typeColors = options.typeColors ?? typeColorsOf(allNodes, typeField, theme.typePalette);
   const nodeColors = options.nodeColors ?? {};
   const large = nodes.length > theme.largeGraphThreshold;
@@ -283,12 +310,25 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   // 按度数：0.7 倍到 1.5 倍
   let sizeOf: number | ((d: NodeData) => number) = baseSize;
   if (nodeSizeBy === 'degree') sizeOf = (d: NodeData) => Math.round(baseSize * (0.7 + 0.8 * levelOf(d.id)));
+  // 超边节点（graphEdges: 'star'）：菱形，按成员数略增大，不带标签（悬停卡片显示超边属性）
+  const isHyperedgeNode = (d: NodeData) => hyperedgeNodes.has(d.id);
+  const hasStar = hyperedgeNodes.size > 0;
+  if (hasStar) {
+    const vertexSize = sizeOf;
+    sizeOf = (d: NodeData) =>
+      isHyperedgeNode(d)
+        ? Math.round(baseSize * Math.min(0.9, 0.45 + 0.05 * (d.memberCount as number)))
+        : typeof vertexSize === 'function'
+          ? vertexSize(d)
+          : vertexSize;
+  }
 
   // 标签按度数：字号 基础 -2 到 +2，颜色由浅灰到近黑；只有中心加粗（子图小时最高一档的实体很多，都加粗太重）
   const byDegree = labelBy === 'degree';
   const labelFontSizeOf: number | ((d: NodeData) => number) = byDegree
     ? (d: NodeData) => Math.round(theme.labelFontSize - 2 + 4 * levelOf(d.id))
     : theme.labelFontSize;
+  const nodeLabelText = hasStar ? (d: NodeData) => (isHyperedgeNode(d) ? '' : labelText(d)) : labelText;
   const [lowFill, highFill] = theme.labelDegreeFill;
   const labelStyle = byDegree
     ? {
@@ -337,15 +377,20 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     data: { nodes, edges },
     hyperedges,
     lineHyperedges,
-    faded: { nodes: fadedNodes, links: [...fadedLinks.values()], members: fadedMembers, dropped },
+    hyperedgeNodes,
+    // 图模式 binary 去掉了没有连线的实体，连向它们的虚线一并去掉
+    faded: { nodes: fadedNodes, links: [...fadedLinks.values()].filter((l) => drawnIds.has(l.target)), members: fadedMembers, dropped },
     plugins: isGraph || !contours ? [] : plugins,
     node: {
       palette: { field: 'cluster' } as any,
+      // 超边节点画成菱形
+      ...(hasStar && { type: (d: NodeData) => (isHyperedgeNode(d) ? 'diamond' : 'circle') }),
       style: {
         size: sizeOf as any,
-        labelText,
+        labelText: nodeLabelText,
         labelFontSize: labelFontSizeOf as any,
         fill: (d: NodeData) =>
+          (hasStar ? starColors.get(hyperedgeNodes.get(d.id)!) : undefined) ??
           nodeColors[d.id] ??
           (centerColored && d.id === centerNode ? theme.centerColor : typeColors[(d as any)[typeField]] || theme.nodeColor),
         // 显式写出被状态覆盖的样式：G6 移除状态时只回到这里的值，不写就会保留状态样式
@@ -371,7 +416,16 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       },
     },
     edge: {
-      style: { size: isGraph ? 3 : 2, stroke: theme.edgeColor, lineWidth: 1, opacity: 1, visibility: 'visible' } as any,
+      style: {
+        size: isGraph ? 3 : 2,
+        // 超边节点的连线用该超边的颜色
+        stroke: hasStar
+          ? (d: EdgeData) => starColors.get(lineHyperedges.get(d.id!)?.[0] as ID) ?? theme.edgeColor
+          : theme.edgeColor,
+        lineWidth: 1,
+        opacity: 1,
+        visibility: 'visible',
+      } as any,
       state: {
         faded: { visibility: 'hidden' },
         fadedShown: { stroke: theme.fadedColor, lineWidth: 1.5, opacity: 0.8 },

@@ -67,7 +67,7 @@ export function useHypergraphExplorer({
     const [searchTerm, setSearchTerm] = useState("");
     const [sortBy, setSortBy] = useState("degree");
     const [sortOrder, setSortOrder] = useState("desc");
-    const [visualizationMode, setVisualizationMode] = useState("hyper");
+    const [visualizationMode, setVisualizationMode] = useState("hyper"); // hyper | graph | matrix
     const [hoverHyperedge, setHoverHyperedge] = useState(null);
     const [hoverNode, setHoverNode] = useState(null);
 
@@ -92,6 +92,8 @@ export function useHypergraphExplorer({
     const [renderSettings, setRenderSettings] = useStoredState(storageKey && `${storageKey}-render`, renderDefaults);
     const [colorOverrides, setColorOverrides] = useStoredState(storageKey && `${storageKey}-colors`, EMPTY_COLOR_OVERRIDES);
     const viewRef = useRef(null);
+    // 右侧栏的小关联矩阵（画布不是矩阵时显示）
+    const sideMatrixRef = useRef(null);
 
     // 没有数据源时显示传入的超图，中心由宿主指定
     const center = source ? selectedVertex : centerNode ?? "";
@@ -486,8 +488,11 @@ export function useHypergraphExplorer({
         setSelectedVertex(next);
     };
 
-    // 表格行悬停：画布上临时高亮
-    const onRowHover = (target) => viewRef.current?.hover(target);
+    // 表格行、侧栏矩阵悬停：画布与侧栏矩阵上临时高亮
+    const onRowHover = (target) => {
+        viewRef.current?.hover(target);
+        sideMatrixRef.current?.hover(target);
+    };
 
     // 点表格行名称：在详情区显示
     const onShowDetails = (kind, id) => {
@@ -510,7 +515,7 @@ export function useHypergraphExplorer({
         ];
     }, [hidden, hypergraph, stats, fadedNodes]);
 
-    // 图模式只画 2 个顶点的超边，按顶点对去重后的连线数
+    // 图模式只画 2 个顶点的超边，按顶点对去重后的连线数（超边节点时不用）
     const lineCount = useMemo(() => {
         if (!visibleHypergraph) return 0;
         const pairs = visibleHypergraph.hyperedges.filter((he) => new Set(he.members).size === 2);
@@ -529,7 +534,7 @@ export function useHypergraphExplorer({
             setHoverNode(nodeWithMax);
         }
 
-        if (visualizationMode === "hyper") {
+        if (visualizationMode !== "graph") {
             const hyperEdges = hypergraph.hyperedges.filter((he) => new Set(he.members).size > 2);
             if (!hoverHyperedge && hyperEdges.length > 0) {
                 const getWeight = (edge) =>
@@ -592,6 +597,7 @@ export function useHypergraphExplorer({
             data: viewData,
             viewRef,
             viewOptions,
+            matrixOrder: renderSettings.matrixOrder,
             selection,
             onSelectionChange,
             pinned: !isEmptySelection(selection),
@@ -605,6 +611,8 @@ export function useHypergraphExplorer({
             onRestoreAll: () => setHidden(EMPTY_HIDDEN),
             setHoverHyperedge,
             setHoverNode,
+            // 画布悬停同步到侧栏矩阵
+            onCanvasHover: (target) => sideMatrixRef.current?.hover(target),
         },
         inspectorProps: {
             hypergraph,
@@ -626,6 +634,18 @@ export function useHypergraphExplorer({
             focusId,
             hoverHyperedge,
             hoverNode,
+            // 侧栏关联矩阵：与画布同一份数据（淡出的枢纽行首虚线圈）、颜色与选择
+            matrix: {
+                ref: sideMatrixRef,
+                data: viewData,
+                order: renderSettings.matrixOrder,
+                centerNode: center,
+                typeColors,
+                nodeColors: colorOverrides.nodes,
+                hyperedgeColors,
+                hubNodes: fadedNodes,
+                onSelectionChange,
+            },
         },
     };
 }

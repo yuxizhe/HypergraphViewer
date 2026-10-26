@@ -1,33 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { HypergraphView } from '../react';
-import HoverTip from './HoverTip.jsx';
-import { HYPEREDGE_FIELD_LIMIT, HYPEREDGE_PRIORITY, HYPEREDGE_TIP_EXCLUDED } from './constants.js';
+import { HypergraphView, IncidenceMatrixView } from '../react';
+import HoverTip, { tipOf } from './HoverTip.jsx';
 import { useI18n } from './i18n.jsx';
-
-// 悬停目标 → 悬停卡片内容：顶点 → 顶点属性（另列只剩它一个成员的、与枢纽实体的超边）；连线（2 个顶点的超边）/ 超边轮廓 → 超边属性
-const tipOf = (hit, hiddenIds) => {
-    if (hit.kind === "node") {
-        const related = hit.fadedHyperedges?.map((he) => ({
-            id: he.id,
-            with: he.members.filter((m) => hiddenIds.has(m)),
-            // 描述：edgeName、description、keywords 依次拼接（缺的跳过）
-            text: [he.edgeName, he.description, he.keywords]
-                .map((v) => (Array.isArray(v) ? v.join(", ") : v))
-                .filter(Boolean)
-                .join(" | ")
-                .replace(/<SEP>/g, " | "),
-        }));
-        return { title: "node", item: hit.item, related };
-    }
-    return {
-        title: hit.kind,
-        item: hit.item,
-        priority: HYPEREDGE_PRIORITY,
-        // 没有 type 的超边（如 Hyper-RAG 原版抽取的图）仍显示 keywords
-        exclude: hit.item.type ? HYPEREDGE_TIP_EXCLUDED : [],
-        limit: HYPEREDGE_FIELD_LIMIT,
-    };
-};
 
 const MAX_CHIPS = 12;
 
@@ -82,6 +56,7 @@ const GraphContainer = ({
     data,
     viewRef,
     viewOptions,
+    matrixOrder,
     selection,
     onSelectionChange,
     pinned,
@@ -90,6 +65,7 @@ const GraphContainer = ({
     onRestoreAll,
     setHoverHyperedge,
     setHoverNode,
+    onCanvasHover,
     compact = false,
 }) => {
     const [tip, setTip] = useState(null);
@@ -114,13 +90,42 @@ const GraphContainer = ({
         if (hit?.kind === "node" && !pinned) {
             setHoverNode((prev) => (prev?.id === hit.item.id ? prev : hit.item));
         }
+        onCanvasHover?.(
+            !hit
+                ? null
+                : hit.kind === "node"
+                  ? { nodes: [hit.id] }
+                  : { hyperedges: hit.kind === "hyperedge" ? [hit.id] : hit.hyperedges || [] }
+        );
         // 悬停卡片只在指针位于元素上时显示
         setTip(hit ? { ...tipOf(hit, new Set(viewOptions.fadedNodes)), x: hit.client.x, y: hit.client.y } : null);
     };
 
     return (
         <div ref={rootRef} className="relative flex-1 min-w-0 h-full bg-white">
-            {data && (
+            {data && viewOptions.mode === "matrix" && (
+                // 关联矩阵：淡出的枢纽也列出（行首虚线圈），选择、悬停、颜色与画布共用
+                <IncidenceMatrixView
+                    key={viewKey}
+                    ref={viewRef}
+                    className="w-full h-full"
+                    data={data}
+                    order={matrixOrder}
+                    centerNode={viewOptions.centerNode}
+                    typeColors={viewOptions.typeColors}
+                    nodeColors={viewOptions.nodeColors}
+                    hyperedgeColors={viewOptions.hyperedgeColors}
+                    hubNodes={viewOptions.fadedNodes}
+                    rowHeaderWidth={compact ? 120 : 168}
+                    // 底部「已隐藏」标签条不挡住最后几行
+                    bottomPadding={hiddenChips.length ? (compact ? 40 : 64) : 8}
+                    selection={selection}
+                    onSelectionChange={onSelectionChange}
+                    onHover={onHover}
+                    toolbar={{ locale: lang, fullscreen: rootRef, size: compact ? "large" : "default" }}
+                />
+            )}
+            {data && viewOptions.mode !== "matrix" && (
                 <HypergraphView
                     key={viewKey}
                     ref={viewRef}

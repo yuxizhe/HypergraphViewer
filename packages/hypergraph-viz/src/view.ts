@@ -167,6 +167,14 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   const hitOf = (e: any): HypergraphHit | null => {
     if (!spec) return null;
     if (e.targetType === 'node') {
+      // 超边节点（graphEdges: 'star'）按超边处理
+      const owner = spec.hyperedgeNodes.get(e.target.id);
+      if (owner !== undefined) {
+        const he = spec.hyperedges.get(owner);
+        if (!he) return null;
+        const item = { ...he, members: [...he.members, ...(spec.faded.members.get(owner) || [])] };
+        return { kind: 'hyperedge', id: owner, members: he.members, item };
+      }
       const node = spec.data.nodes!.find((n) => n.id === e.target.id);
       if (!node) return null;
       const fadedHyperedges = spec.faded.dropped.get(node.id);
@@ -270,8 +278,8 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
       options.onSelectionChange!(next, { additive, hit });
       return;
     }
-    if (e.targetType === 'node') return;
-    const next = hit && hit.kind !== 'node' && hit.id !== selected?.id ? hit : null;
+    if (hit?.kind === 'node') return;
+    const next = hit && hit.id !== selected?.id ? hit : null;
     if (next || selected) setSelected(next);
   });
 

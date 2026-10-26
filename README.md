@@ -1,5 +1,7 @@
 # HypergraphViewer
 
+English | [简体中文](README-CN.md)
+
 Make every hypergraph viewable and readable.
 
 DEMO page: https://yuxizhe.github.io/HypergraphViewer/
@@ -14,10 +16,16 @@ DEMO page: https://yuxizhe.github.io/HypergraphViewer/
   - Hyperedges with 3+ members are drawn as contours around their nodes only (labels excluded), 2-member hyperedges as lines
   - Overlapping labels are hidden until hover or selection by default; the layout can also make room for every label
   - The same data always gives the same layout; force, ForceAtlas2 and circular layouts are also available in the Render panel
+- 🧮 **Incidence Matrix**: one row per vertex, one column per hyperedge, members as dots joined by a line in the hyperedge's color:
+  - Hubs that crowd the canvas are just full rows, so every hyperedge stays readable
+  - Rows and columns ordered by degree, grouped by type, or clustered so related vertices and hyperedges sit together
+  - Shown as a full view (Matrix mode) or next to the canvas in the right panel, linked both ways: hover or click a row or column to highlight it on the canvas, and the other way round
+  - Sticky row and column headers while scrolling; hover cards and selection work as on the canvas
+- 🔀 **Graph Mode**: hyperedges with 3+ members dropped, expanded into pairwise lines, or drawn as hyperedge nodes linked to their members (bipartite graph)
 - 🎨 **Interactive Interface**:
   - Canvas: hover for detailed information, drag graph elements, zoom and pan
   - Left panel: data source, database stats, vertex and hyperedge lists with type filters
-  - Right panel: subgraph stats, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)
+  - Right panel: subgraph stats, incidence matrix, vertex / hyperedge tables (select, show / hide, recolor), render settings (layout, contours, node size)
   - Panels are collapsible cards
 - 🗄️ **Hypergraph-DB files**: `.hgdb` databases saved by [Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) (`hg.save(...)`) can be uploaded or opened with `?url=`. The pickle is decoded in the browser without running any code; values that are Python objects (e.g. custom classes) are shown as `<module.Class>`
 - 🔗 **Your own HIF files**: load a remote URL or upload a local file. `?url=<HIF file URL>` opens a remote file directly; the server must allow cross-origin requests (raw GitHub URLs do). `NaN` / `Infinity` values written by Python's `json` are read as `null`
@@ -51,7 +59,8 @@ The hypergraph rendering of this project is published as the npm package [`hyper
 - **Hypergraph layout**: vertices of the same hyperedge stay together, non-members are pushed out of its contour, labels do not overlap
 - **Hyperedge contours**: hyperedges with 3+ members are drawn as bubble sets around the nodes only (labels excluded); 2-member hyperedges are drawn as lines
 - **Hover and selection**: hover callbacks for nodes, lines and contours; clicking a hyperedge highlights its members and dims the rest
-- **Graph mode**: hyperedges as pairwise lines with a force layout
+- **Graph mode**: hyperedges as pairwise lines with a force layout, or as hyperedge nodes linked to their members (bipartite graph)
+- **Incidence matrix**: one row per vertex, one column per hyperedge (`IncidenceMatrixView`); hubs are just full rows
 - React component, framework-free API, and a `<script>` build (`window.HypergraphViz`)
 
 ```bash

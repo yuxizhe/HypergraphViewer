@@ -5,6 +5,8 @@ import type { HypergraphView as View, ViewOptions } from './view';
 import { createHypergraphView } from './view';
 
 export type { ToolbarOptions } from './toolbar';
+export type { IncidenceMatrixHandle, IncidenceMatrixViewProps } from './matrix-view';
+export { IncidenceMatrixView } from './matrix-view';
 
 // 与 HypergraphViewer 默认渲染设置一致：撑满画布、指针悬停高亮、标签字号不随缩放变化；节点大小、标签字号与颜色按度数分级；
 // 布局不为标签让位，重叠的标签不显示（悬停、选中时显示）

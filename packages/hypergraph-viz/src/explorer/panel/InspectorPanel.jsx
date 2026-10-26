@@ -1,6 +1,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { hyperedgeIdOf } from '../../analysis';
+import { IncidenceMatrixView } from '../../matrix-view';
 import DetailsPanel from '../DetailsPanel.jsx';
+import HoverTip, { tipOf } from '../HoverTip.jsx';
 import ElementTable from './ElementTable.jsx';
 import Section, { Chevron } from './Section.jsx';
 import RenderTab from './RenderTab.jsx';
@@ -36,6 +38,7 @@ const InspectorPanel = ({
     focusId,
     hoverHyperedge,
     hoverNode,
+    matrix,
     // fill：撑满所在容器（浮层、底部面板中）；onCollapse：收起按钮交给外层（不传时收起成右侧窄条）；
     // compact：手机上的底部面板（不缩小、没有标题行与详情区，详情在单独的面板中）
     fill = false,
@@ -43,9 +46,11 @@ const InspectorPanel = ({
     compact = false,
 }) => {
     const { t } = useI18n();
-    const [open, setOpen] = useState({ stats: true, nodes: true, hyperedges: true, render: false });
+    const [open, setOpen] = useState({ stats: false, matrix: true, nodes: true, hyperedges: true, render: false });
     const [collapsed, setCollapsed] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
+    // 侧栏矩阵的悬停卡片
+    const [tip, setTip] = useState(null);
     const sectionRefs = { nodes: useRef(null), hyperedges: useRef(null) };
     const toggle = (key) => () => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
@@ -254,6 +259,39 @@ const InspectorPanel = ({
                                 }))}
                             />
                         </Section>
+                        {/* 画布不是矩阵时，侧栏显示同一子图的关联矩阵 */}
+                        {matrix && mode !== "matrix" && matrix.data && (
+                            <Section title={t("tab_matrix")} open={open.matrix} onToggle={toggle("matrix")}>
+                                <div className="h-72 -mx-1">
+                                    <IncidenceMatrixView
+                                        ref={matrix.ref}
+                                        data={matrix.data}
+                                        order={matrix.order}
+                                        centerNode={matrix.centerNode}
+                                        typeColors={matrix.typeColors}
+                                        nodeColors={matrix.nodeColors}
+                                        hyperedgeColors={matrix.hyperedgeColors}
+                                        hubNodes={matrix.hubNodes}
+                                        rowHeaderWidth={96}
+                                        minCellSize={9}
+                                        columnHeaderHeight={10}
+                                        selection={selection}
+                                        onSelectionChange={matrix.onSelectionChange}
+                                        onHover={(hit) => {
+                                            onRowHover(
+                                                !hit
+                                                    ? null
+                                                    : hit.kind === "node"
+                                                      ? { nodes: [hit.id] }
+                                                      : { hyperedges: hit.hyperedges || [hit.id] }
+                                            );
+                                            setTip(hit ? { ...tipOf(hit), x: hit.client.x, y: hit.client.y } : null);
+                                        }}
+                                    />
+                                </div>
+                                {tip && <HoverTip {...tip} />}
+                            </Section>
+                        )}
                         <Section
                             title={t("tab_nodes")}
                             count={counts.nodes}

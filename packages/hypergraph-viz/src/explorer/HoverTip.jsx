@@ -2,6 +2,33 @@ import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { PropertyList } from './DetailsPanel.jsx';
 import { useI18n } from './i18n.jsx';
+import { HYPEREDGE_FIELD_LIMIT, HYPEREDGE_PRIORITY, HYPEREDGE_TIP_EXCLUDED } from './constants.js';
+
+// 悬停目标 → 悬停卡片内容：顶点 → 顶点属性（另列只剩它一个成员的、与枢纽实体的超边）；连线（2 个顶点的超边）/ 超边轮廓 → 超边属性
+// eslint-disable-next-line react-refresh/only-export-components
+export const tipOf = (hit, hiddenIds = new Set()) => {
+    if (hit.kind === "node") {
+        const related = hit.fadedHyperedges?.map((he) => ({
+            id: he.id,
+            with: he.members.filter((m) => hiddenIds.has(m)),
+            // 描述：edgeName、description、keywords 依次拼接（缺的跳过）
+            text: [he.edgeName, he.description, he.keywords]
+                .map((v) => (Array.isArray(v) ? v.join(", ") : v))
+                .filter(Boolean)
+                .join(" | ")
+                .replace(/<SEP>/g, " | "),
+        }));
+        return { title: "node", item: hit.item, related };
+    }
+    return {
+        title: hit.kind,
+        item: hit.item,
+        priority: HYPEREDGE_PRIORITY,
+        // 没有 type 的超边（如 Hyper-RAG 原版抽取的图）仍显示 keywords
+        exclude: hit.item.type ? HYPEREDGE_TIP_EXCLUDED : [],
+        limit: HYPEREDGE_FIELD_LIMIT,
+    };
+};
 
 const TIP_OFFSET = 12;
 const TIP_MARGIN = 8;
