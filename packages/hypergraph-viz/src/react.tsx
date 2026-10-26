@@ -100,16 +100,16 @@ export const HypergraphView = forwardRef<View | null, HypergraphViewProps>(funct
   // 对象类选项需由宿主保持引用稳定（useMemo），否则每次渲染都会重新布局
   const {
     data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
-    nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection,
+    nodeColors, hyperedgeColors, contours, contourBounds, contourNesting, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection, maxFitZoom,
   } = options;
   useEffect(() => {
     viewRef.current?.update({
       data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
-      nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection,
+      nodeColors, hyperedgeColors, contours, contourBounds, contourNesting, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection, maxFitZoom,
     });
   }, [
     data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
-    nodeColors, hyperedgeColors, contours, contourBounds, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection,
+    nodeColors, hyperedgeColors, contours, contourBounds, contourNesting, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection, maxFitZoom,
   ]);
 
   const toolbarOptions = toolbar === true ? {} : toolbar || null;

@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react';
 
 // 右侧面板「渲染」Tab 的默认值；与 hypergraph-viz 的默认行为一致
 export const DEFAULT_RENDER_SETTINGS = {
-    layout: "hypergraph", // hypergraph | force | force-atlas2 | circular
+    layout: "hypergraph", // hypergraph | polygon（多边形画法 HGPolyVis）| force | force-atlas2 | circular
     useCenter: true,
     nodeSpacing: 50,
+    maxFitZoom: 1, // 撑满画布时的最大放大倍数：节点少时不放大
     graphEdges: "star", // 图模式下 3 元及以上超边：star 超边节点（二部图）/ binary 丢弃 / clique 拆成两两连线
     matrixOrder: "degree", // 关联矩阵的行列排序：degree | type | cluster
     contours: true,
     contourBounds: "key", // key 只圈节点 / render 包含标签
+    contourNesting: false, // 嵌套轮廓（仿 DHG）：小超边在内、大超边在外，节点每被包一层外扩一段
     hyperedgeColorBy: "hyperedge", // hyperedge | type
     fillOpacity: 0.2,
     nodeColorBy: "type", // type | uniform
@@ -20,6 +22,7 @@ export const DEFAULT_RENDER_SETTINGS = {
     // 标签重叠：hide 布局不为标签让位，重叠的标签不显示（悬停、选中时显示）/ layout 布局时让标签互不重叠（长标签会把超边拉长）/ allow 允许重叠
     labelOverlap: "hide",
     labelMaxLength: 0, // 标签最大字符数，超出截断；0 不限
+    labelStripType: true, // 去掉最后一个冒号及之前的部分（「期间:NVDA:FY2026Q4」→「FY2026Q4」）
 };
 
 // 用户改过的颜色：实体类型、单个实体、单条超边、超边类型

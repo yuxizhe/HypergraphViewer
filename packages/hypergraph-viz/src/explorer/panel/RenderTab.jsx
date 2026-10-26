@@ -73,7 +73,9 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
     const set = (key) => (value) => setSettings((s) => ({ ...s, [key]: value }));
     const isHyper = mode === "hyper";
     const isMatrix = mode === "matrix";
-    const hypergraphLayout = isHyper && settings.layout === "hypergraph";
+    // 多边形布局也以超图布局为起点，节点间距、中心实体同样生效
+    const hypergraphLayout = isHyper && (settings.layout === "hypergraph" || settings.layout === "polygon");
+    const polygon = isHyper && settings.layout === "polygon";
     // 超边颜色用于轮廓、超边节点（图模式 star）和矩阵的列
     const hyperedgeColored = isMatrix || (isHyper ? settings.contours : settings.graphEdges === "star");
 
@@ -95,11 +97,12 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
             <Group title={t("groupLayout")}>
                 <Row label={t("layoutAlgorithm")} relayout disabled={isMatrix}>
                     <select
-                        value={!isHyper && settings.layout === "hypergraph" ? "force" : settings.layout}
+                        value={!isHyper && (settings.layout === "hypergraph" || settings.layout === "polygon") ? "force" : settings.layout}
                         onChange={(e) => set("layout")(e.target.value)}
                         className="text-xs border-gray-300 rounded-md py-0.5 pl-2 pr-7"
                     >
                         {isHyper && <option value="hypergraph">{t("layoutHypergraph")}</option>}
+                        {isHyper && <option value="polygon">{t("layoutPolygon")}</option>}
                         <option value="force">{t("layoutForce")}</option>
                         <option value="force-atlas2">ForceAtlas2</option>
                         <option value="circular">{t("layoutCircular")}</option>
@@ -110,6 +113,18 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                 </Row>
                 <Row label={t("nodeSpacing")} relayout disabled={!hypergraphLayout}>
                     <Slider value={settings.nodeSpacing} min={10} max={100} step={5} onChange={set("nodeSpacing")} />
+                </Row>
+                <Row label={t("maxFitZoom")} disabled={isMatrix}>
+                    <span title={t("maxFitZoomHint")} className="flex items-center">
+                        <Slider
+                            value={settings.maxFitZoom}
+                            min={0.5}
+                            max={3}
+                            step={0.25}
+                            onChange={set("maxFitZoom")}
+                            format={(v) => `${v}×`}
+                        />
+                    </span>
                 </Row>
                 <Row label={t("graphEdges")} relayout disabled={mode !== "graph"}>
                     <Segmented
@@ -125,18 +140,24 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                 {isHyper && settings.layout === "force" && (
                     <div className="text-[11px] text-gray-400">{t("forceHint")}</div>
                 )}
+                {polygon && <div className="text-[11px] text-gray-400">{t("polygonHint")}</div>}
             </Group>
 
             <Group title={t("groupHyperedge")}>
                 <Row label={t("showContours")} disabled={!isHyper}>
                     <Switch checked={settings.contours} onChange={set("contours")} />
                 </Row>
-                <Row label={t("contourBounds")} disabled={!isHyper || !settings.contours}>
+                <Row label={t("contourBounds")} disabled={!isHyper || !settings.contours || polygon}>
                     <Segmented
                         value={settings.contourBounds}
                         onChange={set("contourBounds")}
                         options={[["key", t("boundsKey")], ["render", t("boundsRender")]]}
                     />
+                </Row>
+                <Row label={t("contourNesting")} disabled={!isHyper || !settings.contours || polygon}>
+                    <span title={t("contourNestingHint")}>
+                        <Switch checked={settings.contourNesting} onChange={set("contourNesting")} />
+                    </span>
                 </Row>
                 <Row label={t("hyperedgeColorBy")} disabled={!hyperedgeColored}>
                     <Segmented
@@ -213,6 +234,11 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                                 ["allow", t("labelOverlapAllow")],
                             ]}
                         />
+                    </Row>
+                    <Row label={t("labelStripType")} relayout disabled={settings.labelMode === "none"}>
+                        <span title={t("labelStripTypeHint")}>
+                            <Switch checked={settings.labelStripType} onChange={set("labelStripType")} />
+                        </span>
                     </Row>
                     <Row label={t("labelMaxLength")} relayout disabled={settings.labelMode === "none"}>
                         <input

@@ -6,6 +6,12 @@ import { DEFAULT_THEME, typeColorsOf } from '../theme';
 import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from './settings.js';
 
 // faded：隐藏的实体中“淡出”的部分（不参与布局，悬停、选中相关元素时在画布上显示与它们的关联），其余彻底隐藏
+// 去掉最后一个冒号（半角或全角）及之前的部分：「期间:NVDA:FY2026Q4」→「FY2026Q4」；冒号在末尾时保持原样
+const stripPrefix = (id) => {
+    const i = Math.max(id.lastIndexOf(":"), id.lastIndexOf("："));
+    return i >= 0 && i < id.length - 1 ? id.slice(i + 1) : id;
+};
+
 export const EMPTY_HIDDEN = { nodes: [], hyperedges: [], faded: [] };
 
 // 在 map 中设置 / 删除（value 为 null）一项，返回新对象
@@ -428,17 +434,23 @@ export function useHypergraphExplorer({
         }),
         [renderSettings.layout, renderSettings.nodeSpacing, renderSettings.labelOverlap, renderSettings.useCenter]
     );
-    // 标签：全部 / 仅中心与枢纽 / 不显示；超过最大长度的截断（布局按截断后的宽度防重叠，悬停卡片仍显示全名）
+    // 标签：全部 / 仅中心与枢纽 / 不显示；可去掉冒号前的前缀（「期间:NVDA:FY2026Q4」→「FY2026Q4」，类型由颜色表示）；
+    // 超过最大长度的截断（布局按截断后的宽度防重叠，悬停卡片仍显示全名）
     const labelText = useMemo(() => {
         if (renderSettings.labelMode === "none") return () => "";
         const max = renderSettings.labelMaxLength;
-        const cut = (s) => (max && s.length > max ? `${s.slice(0, max - 1)}…` : s);
+        const strip = renderSettings.labelStripType;
+        if (!max && !strip && renderSettings.labelMode !== "key") return undefined;
+        const text = (d) => {
+            const s = strip ? stripPrefix(String(d.id)) : String(d.id);
+            return max && s.length > max ? `${s.slice(0, max - 1)}…` : s;
+        };
         if (renderSettings.labelMode === "key") {
             const keep = new Set(stats?.hubs);
-            return (d) => (d.id === center || keep.has(d.id) ? cut(String(d.id)) : "");
+            return (d) => (d.id === center || keep.has(d.id) ? text(d) : "");
         }
-        return max ? (d) => cut(String(d.id)) : undefined;
-    }, [renderSettings.labelMode, renderSettings.labelMaxLength, stats, center]);
+        return text;
+    }, [renderSettings.labelMode, renderSettings.labelMaxLength, renderSettings.labelStripType, stats, center]);
 
     const viewOptions = {
         mode: visualizationMode,
@@ -449,6 +461,8 @@ export function useHypergraphExplorer({
         graphEdges: renderSettings.graphEdges,
         contours: renderSettings.contours,
         contourBounds: renderSettings.contourBounds,
+        contourNesting: renderSettings.contourNesting,
+        maxFitZoom: renderSettings.maxFitZoom,
         nodeSizeBy: renderSettings.nodeSizeBy,
         labelBy: renderSettings.labelBy,
         hideOverlappingLabels: renderSettings.labelOverlap === "hide",
