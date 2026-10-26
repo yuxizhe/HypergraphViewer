@@ -5,7 +5,7 @@ import { loadDataSource } from './api.js';
 import { APP_MESSAGES, applyLang, detectLang } from './i18n.js';
 import { DATASETS, initialSource, rememberSource } from './datasets.js';
 
-// 左栏顶部的数据源卡片：示例数据集、远程 .hgdb / HIF、上传文件；加载失败时展开并显示错误
+// 左栏顶部的数据源卡片：示例数据集、远程 .hgdb / HIF、本地文件；加载失败时展开并显示错误
 const SourceSection = ({ current, loading, error, onChange, lang }) => {
     const [open, setOpen] = useState(true);
     const label =

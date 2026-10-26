@@ -5,13 +5,13 @@ export const APP_MESSAGES = {
     en: {
         pageTitle: "Hypergraph Visualization",
         dataSource: "Data Source",
-        useDefaultData: "Sample Datasets", remoteHif: "Remote .hgdb / HIF URL", uploadHif: "Upload .hgdb / HIF File",
+        useDefaultData: "Sample Datasets", remoteHif: "Remote .hgdb / HIF URL", uploadHif: "Open Local .hgdb / HIF File",
         hifUrlPlaceholder: "Enter .hgdb / HIF file URL", load: "Load", loading: "Loading...",
     },
     zh: {
         pageTitle: "超图可视化",
         dataSource: "数据源",
-        useDefaultData: "示例数据集", remoteHif: "远程 .hgdb / HIF 地址", uploadHif: "上传 .hgdb / HIF 文件",
+        useDefaultData: "示例数据集", remoteHif: "远程 .hgdb / HIF 地址", uploadHif: "打开本地 .hgdb / HIF 文件",
         hifUrlPlaceholder: "输入 .hgdb / HIF 文件地址", load: "加载", loading: "加载中...",
     },
 };
