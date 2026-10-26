@@ -8,13 +8,15 @@
  * - 配置更新（graph.setPlugins / updatePlugin，如点击高亮改透明度）后立即应用到已画好的轮廓，
  *   npm 版基类的 update 只合并配置、不重画；
  * - graph 上的 SUPPRESS_CONTOUR_UPDATE 计数大于 0 时（只改样式、状态），不因元素更新而重算轮廓；
- * - 成员的元素还没创建时（换数据过程中，G6 先更新已有元素、后创建新元素）不重算，等 AFTER_RENDER 再画。
+ * - 成员的元素还没创建时（换数据过程中，G6 先更新已有元素、后创建新元素）不重算，等 AFTER_RENDER 再画；
+ * - polygon 为 true 时画成多边形（HGPolyVis）：成员按绕质心的角度连成，每个成员都在角上，不经 bubble-sets 计算。
  * 以新类型名 'hover-bubble-sets' 注册，不覆盖 G6 内置的 'bubble-sets'。
  */
-import type { BubbleSetsOptions } from '@antv/g6';
+import type { BubbleSetsOptions, ID } from '@antv/g6';
 import { CommonEvent, GraphEvent } from '@antv/g6';
 // 基类换成支持 memberBoundsType: 'key' 的版本（只圈节点、不包裹标签）
 import { KeyBoundsBubbleSets } from './bubble-sets-key';
+import { polygonOrder } from './polygon-layout';
 
 export const HOVER_BUBBLE_SETS = 'hover-bubble-sets';
 export const BUBBLE_SETS_TARGET = 'bubble-sets';
@@ -37,12 +39,25 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
 
   constructor(
     context: ConstructorParameters<typeof KeyBoundsBubbleSets>[0],
-    options: BubbleSetsOptions & { memberBoundsType?: 'render' | 'key' },
+    options: BubbleSetsOptions & { memberBoundsType?: 'render' | 'key'; polygon?: boolean },
   ) {
     super(context, { zIndex: -1, pointerEvents: 'all', ...options } as typeof options);
     // 基类的 shape / init / drawBubbleSets 均为 private，这里统一经 self 访问
     const self = this as any;
     const { graph } = this.context;
+    // 多边形画法：按成员当前位置直接连成多边形 / polygon drawing: straight from the members' current positions
+    const getPath = self.getPath;
+    self.getPath = (...args: unknown[]) => {
+      if (!self.options.polygon) return getPath(...args);
+      const points = polygonOrder(self.options.members as ID[], (id) => graph.getElementPosition(id) as [number, number]);
+      return [
+        ...points.map((id, i) => {
+          const [x, y] = graph.getElementPosition(id);
+          return [i ? 'L' : 'M', x, y];
+        }),
+        ['Z'],
+      ];
+    };
     // 基类构造时已把原始 drawBubbleSets 绑定到 AFTER_RENDER，换成带事件绑定的版本
     graph.off(GraphEvent.AFTER_RENDER, self.drawBubbleSets);
     const baseDraw = self.drawBubbleSets;
@@ -95,12 +110,18 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
   update(options: Partial<BubbleSetsOptions>) {
     const self = this as any;
     const prevMembers = this.options.members;
+    const prevPolygon = (this.options as any).polygon;
     super.update(options);
     // 成员变了（换数据、隐藏实体）：清掉按旧成员缓存的区域。否则基类在算新路径时要先移除旧成员，
     // 对已删除的节点调用 graph.getElementType 会抛 "Unknown element type"
     const members = this.options.members;
     if (options.members && (members.length !== prevMembers.length || members.some((m, i) => m !== prevMembers[i]))) {
       self.init();
+    }
+    // 换了画法：按新画法重画 / drawing switched between bubble and polygon: redraw
+    if ('polygon' in options && (options as any).polygon !== prevPolygon && self.shape && !self.shape.destroyed) {
+      self.drawBubbleSets();
+      return;
     }
     // 只更新样式（路径 d 不在 style 中，保持不变），不重算轮廓
     if (self.shape && !self.shape.destroyed) self.shape.update(self.parseOptions().style);
