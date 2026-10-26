@@ -193,7 +193,16 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                         options={[["fixed", t("sizeFixed")], ["degree", t("sizeDegree")]]}
                     />
                 </Row>
-                <Row label={t("autoHideDegree")} relayout>
+                <Row label={t("autoHideBy")} relayout>
+                    <span title={t("autoHideByHint")}>
+                        <Segmented
+                            value={settings.autoHideBy}
+                            onChange={set("autoHideBy")}
+                            options={[["overlap", t("autoHideOverlap")], ["degree", t("autoHideByDegree")], ["off", t("autoHideOff")]]}
+                        />
+                    </span>
+                </Row>
+                <Row label={t("autoHideDegree")} relayout disabled={settings.autoHideBy !== "degree"}>
                     <input
                         type="number"
                         min={0}

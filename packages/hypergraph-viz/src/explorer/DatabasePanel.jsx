@@ -155,7 +155,6 @@ const DatabasePanel = ({
                                 typeOf={typeOf}
                                 colorOfType={typeColorOf}
                                 onTypeClick={(type) => setVertexTypes((list) => toggleIn(list, type))}
-                                showHubs={false}
                             />
                         </>
                     )}

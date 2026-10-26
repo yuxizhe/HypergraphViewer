@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats } from '../analysis';
+import { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats, overlapHubs } from '../analysis';
 import { EMPTY_SELECTION, isEmptySelection } from '../selection';
 import { pairId } from '../spec';
 import { DEFAULT_THEME, typeColorsOf } from '../theme';
@@ -91,7 +91,12 @@ export function useHypergraphExplorer({
     const [focusId, setFocusId] = useState(null);
     // 宿主可改默认值（如不自动隐藏），用户在「渲染」里改过的仍以存下的为准
     const renderDefaults = useMemo(
-        () => ({ ...DEFAULT_RENDER_SETTINGS, ...defaultRenderSettings }),
+        () => ({
+            ...DEFAULT_RENDER_SETTINGS,
+            // 只给了度数阈值（autoHideBy 出现之前的写法）时仍按度数隐藏 / a bare autoHideDegree keeps hiding by degree
+            ...(defaultRenderSettings && "autoHideDegree" in defaultRenderSettings && { autoHideBy: "degree" }),
+            ...defaultRenderSettings,
+        }),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [JSON.stringify(defaultRenderSettings ?? {})]
     );
@@ -280,23 +285,37 @@ export function useHypergraphExplorer({
         }
     };
 
-    // 打开子图时自动隐藏的实体：子图内度数（所在超边数，同右侧实体表的“度数”）超过阈值的，中心也不例外；
-    // 以及指定默认隐藏的类型（如金融数据的“财季”）
-    const autoHidden = (graph, threshold) => {
-        if (!graph) return EMPTY_HIDDEN;
-        const { degree } = hypergraphStats(graph);
+    // 打开子图时自动隐藏的实体，中心也不例外：
+    // - overlap：按注定重叠（共享 ≥3 个成员的超边对、共同成员 ≥2 个的超边三元组）贪心挑出隐含枢纽（overlapHubs）；
+    // - degree：子图内度数（所在超边数，同右侧实体表的“度数”）超过阈值的；
+    // 以及指定默认隐藏的类型（如金融数据的“财季”），先于挑枢纽去掉
+    const typedOf = (graph) => {
         const types = new Set(optionsRef.current.hiddenTypes || []);
-        // 度数超过阈值的淡出，指定类型的彻底隐藏
-        const faded = Object.keys(graph.vertices).filter((id) => threshold && (degree.get(id) || 0) > threshold);
-        const typed = Object.keys(graph.vertices).filter(
-            (id) => !faded.includes(id) && types.has(graph.vertices[id]?.entity_type)
-        );
+        return Object.keys(graph.vertices).filter((id) => types.has(graph.vertices[id]?.entity_type));
+    };
+    // 隐含枢纽：去掉默认隐藏的类型后，按注定重叠挑出的实体（实体表的“枢纽”标记、“中心与枢纽”标签、按重叠自动隐藏共用）
+    const implicitHubs = (graph) => {
+        const typed = typedOf(graph);
+        return overlapHubs(typed.length ? filterHypergraph(graph, { nodes: typed }) : graph).hubs;
+    };
+    const autoHidden = (graph, { autoHideBy, autoHideDegree }) => {
+        if (!graph) return EMPTY_HIDDEN;
+        const types = new Set(optionsRef.current.hiddenTypes || []);
+        // 指定类型的彻底隐藏，枢纽淡出
+        const typed = typedOf(graph);
+        let faded = [];
+        if (autoHideBy === "overlap") {
+            faded = implicitHubs(graph);
+        } else if (autoHideBy === "degree" && autoHideDegree) {
+            const { degree } = hypergraphStats(graph);
+            faded = Object.keys(graph.vertices).filter((id) => !types.has(graph.vertices[id]?.entity_type) && (degree.get(id) || 0) > autoHideDegree);
+        }
         return faded.length || typed.length ? { nodes: [...faded, ...typed], hyperedges: [], faded } : EMPTY_HIDDEN;
     };
 
-    // 当前子图自动隐藏的实体（改阈值由下方的 effect 处理）
+    // 当前子图自动隐藏的实体（改设置由下方的 effect 处理）
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    const autoHiddenOfGraph = useMemo(() => autoHidden(hypergraph, renderSettings.autoHideDegree), [hypergraph]);
+    const autoHiddenOfGraph = useMemo(() => autoHidden(hypergraph, renderSettings), [hypergraph]);
     // 换子图后的第一次渲染就用自动隐藏的结果：否则视图先按完整子图布局一次，紧接着又按隐藏后的重新布局，
     // 前一次没算完的布局会去更新已删除的节点（G6 报 Node not found / Unknown element type）
     const hidden = hiddenGraph === hypergraph ? hiddenState : autoHiddenOfGraph;
@@ -311,17 +330,17 @@ export function useHypergraphExplorer({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [hypergraph]);
 
-    // 改了阈值：按新阈值重新隐藏当前子图的实体（手动隐藏的超边保留）
+    // 改了自动隐藏方式或阈值：重新隐藏当前子图的实体（手动隐藏的超边保留）
     const autoHideLoadedRef = useRef(false);
     useEffect(() => {
         if (!autoHideLoadedRef.current) {
             autoHideLoadedRef.current = true;
             return;
         }
-        const { nodes, faded } = autoHidden(hypergraph, renderSettings.autoHideDegree);
+        const { nodes, faded } = autoHidden(hypergraph, renderSettings);
         setHidden((h) => ({ ...h, nodes, faded }));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [renderSettings.autoHideDegree]);
+    }, [renderSettings.autoHideBy, renderSettings.autoHideDegree]);
 
     // 被隐藏的元素移出选择
     useEffect(() => {
@@ -334,7 +353,9 @@ export function useHypergraphExplorer({
         });
     }, [hidden]);
 
-    const stats = useMemo(() => hypergraph && hypergraphStats(hypergraph), [hypergraph]);
+    // 枢纽按注定重叠挑出（而非 hypergraphStats 的“出现在 ≥50% 超边中”），与自动隐藏一致
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const stats = useMemo(() => hypergraph && { ...hypergraphStats(hypergraph), hubs: implicitHubs(hypergraph) }, [hypergraph]);
     const visibleHypergraph = useMemo(
         () => hypergraph && filterHypergraph(hypergraph, hidden),
         [hypergraph, hidden]

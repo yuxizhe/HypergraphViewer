@@ -1,6 +1,7 @@
 export { EDGE_SEPARATOR, fromKeyedEdges } from './adapters';
 export type { HypergraphStats } from './analysis';
-export { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats } from './analysis';
+export type { ForcedOverlaps } from './analysis';
+export { filterHypergraph, forcedOverlaps, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats, overlapHubs } from './analysis';
 export { KeyBoundsBubbleSets } from './bubble-sets-key';
 export type { LabelCandidate } from './label-culling';
 export { cullLabels } from './label-culling';

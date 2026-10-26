@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { datas } from './fixtures/neurology-data.js';
-import { fromKeyedEdges, HypergraphLayout, PolygonLayout, polygonOrder, toG6Spec } from '../src';
+import { forcedOverlaps, fromKeyedEdges, HypergraphLayout, overlapHubs, PolygonLayout, polygonOrder, toG6Spec } from '../src';
 
 const centers = Object.keys(datas.graphs).slice(0, 6);
 
@@ -42,5 +42,29 @@ describe.each(centers)('vertex %s', (center) => {
 
     const sets = (poly.plugins as any[]).map((p) => p.members as string[]);
     if (sets.length) expect(sideCV(after, sets)).toBeLessThan(sideCV(before, sets));
+  });
+});
+
+describe('forced overlaps', () => {
+  // 两条超边共享 a、b、c，三条超边共享 a、b：枢纽 a 去掉后两种结构都消失
+  const data = {
+    vertices: Object.fromEntries('abcdefgh'.split('').map((id) => [id, {}])),
+    hyperedges: [
+      { id: '1', members: ['a', 'b', 'c', 'd'] },
+      { id: '2', members: ['a', 'b', 'c', 'e'] },
+      { id: '3', members: ['a', 'b', 'f'] },
+      { id: '4', members: ['g', 'h', 'a'] },
+    ],
+  };
+
+  it('counts pairs sharing 3+ and triples sharing 2+', () => {
+    // 对：(1,2)；三元组：(1,2,3)
+    expect(forcedOverlaps(data)).toEqual({ pairs: 1, triples: 1 });
+  });
+
+  it('greedily picks the hub behind them', () => {
+    const { hubs, after } = overlapHubs(data);
+    expect(hubs).toEqual(['a']);
+    expect(after).toEqual({ pairs: 0, triples: 0 });
   });
 });
