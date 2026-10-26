@@ -25,12 +25,13 @@
   - 左侧面板：数据源、数据库统计、实体与超边列表（支持类型筛选）
   - 右侧面板：当前子图统计、关联矩阵、实体 / 超边表（选择、显隐、改色）、渲染设置（布局、轮廓、节点大小）
   - 面板为可展开收起的卡片
-- 🗄️ **Hypergraph-DB 文件**：[Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) 保存的 `.hgdb` 数据库（`hg.save(...)`）可以上传或用 `?url=` 打开。pickle 在浏览器中解码，不执行任何代码；属性值为 Python 对象（如自定义类）时显示为 `<模块.类名>`
-- 🔗 **自己的 HIF 文件**：可加载远程网址或上传本地文件。网址加 `?url=<HIF 文件网址>` 可直接打开远程文件；文件所在服务器需允许跨域请求（GitHub raw 网址可以）。Python `json` 写出的 `NaN` / `Infinity` 按 `null` 读取
+- 🗄️ **Hypergraph-DB 文件**：[Hypergraph-DB](https://github.com/iMoonLab/Hypergraph-DB) 保存的 `.hgdb` 数据库（`hg.save(...)`）可以打开本地文件或用 `?url=` 打开。pickle 在浏览器中解码，不执行任何代码；属性值为 Python 对象（如自定义类）时显示为 `<模块.类名>`
+- 🔗 **自己的 HIF 文件**：可加载远程网址或打开本地文件。网址加 `?url=<HIF 文件网址>` 可直接打开远程文件；文件所在服务器需允许跨域请求（GitHub raw 网址可以）。Python `json` 写出的 `NaN` / `Infinity` 按 `null` 读取
+- 🔒 **本地渲染**：本地文件在浏览器中读取和渲染，无需上传服务器
 - 📱 **手机与平板**：按浏览器自身宽度切换布局（见下方截图）:
   - 电脑（≥ 1200 px）：三栏
   - 平板（768–1199 px）：画布占满宽度，左栏从左侧滑出，右栏浮在画布上
-  - 手机（< 768 px）：画布全屏，「实体 / 子图 / 详情」从底部弹出（半屏时仍能看到图，上拉展开）；点实体或超边查看详情
+  - 手机（< 768 px）：画布全屏，「实体 / 子图 / 详情」从底部弹出（半屏时仍能看到图，上拉展开）；点实体或超边会高亮并显示信息卡片（同鼠标悬停），双指捏合缩放
 - 📝 **详细信息面板**: 实时显示超边和节点的详细属性
 - 🎯 **分页浏览**: 高效处理大量数据集
 - 📚 **示例数据集**（HIF 格式，在数据源卡片中切换；网址加 `?dataset=<id>` 可直接打开某一套）:
@@ -83,7 +84,7 @@ packages/hypergraph-viz/        # npm 包
 │   └── admin/                  # hypergraph-viz/admin：<HypergraphAdmin> 管理后台（Hypergraph-DB 的 /admin）
 src/                            # 本应用：<HypergraphExplorer> 加数据源选择
 ├── components/
-│   └── DataSourceSelector.jsx  # 示例数据集、远程 .hgdb / HIF、上传文件
+│   └── DataSourceSelector.jsx  # 示例数据集、远程 .hgdb / HIF、本地文件
 ├── api.js                      # 载入所选数据源
 ├── datasets.js                 # 示例数据集列表（文件在 public/datasets/，由 scripts/build_datasets.py 生成）
 ├── i18n.js                     # 本应用的文字；语言记在网址与 localStorage

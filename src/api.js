@@ -5,7 +5,7 @@ const isValid = (data) =>
     data && typeof data === 'object' && data.database?.name && typeof data.database.vertices === 'number' &&
     Array.isArray(data.vertices) && data.graphs && typeof data.graphs === 'object';
 
-// 数据源 → 内部格式（createLocalSource 的输入）：示例数据集、远程 HIF 地址、上传的 HIF 文件
+// 数据源 → 内部格式（createLocalSource 的输入）：示例数据集、远程 HIF 地址、本地 HIF 文件
 export const loadDataSource = async (source) => {
     let data;
     switch (source.type) {
