@@ -21,7 +21,7 @@ DEMO page: https://yuxizhe.github.io/HypergraphViewer/
   - Rows and columns ordered by degree, grouped by type, or clustered so related vertices and hyperedges sit together
   - Shown as a full view (Matrix mode) or next to the canvas in the right panel, linked both ways: hover or click a row or column to highlight it on the canvas, and the other way round
   - Sticky row and column headers while scrolling; hover cards and selection work as on the canvas
-- 🔀 **Graph Mode**: hyperedges with 3+ members dropped, expanded into pairwise lines, or drawn as hyperedge nodes linked to their members (bipartite graph)
+- 🔀 **Graph Mode**: by default each hyperedge with 3+ members is drawn as a hyperedge node linked to its members (bipartite graph), sized in proportion to its member count; it can also be dropped or expanded into pairwise lines
 - 🎨 **Interactive Interface**:
   - Canvas: hover for detailed information, drag graph elements, zoom and pan
   - Left panel: data source, database stats, vertex and hyperedge lists with type filters
