@@ -72,6 +72,14 @@ export interface SpecOptions {
   contours?: boolean;
   /** 轮廓范围：'key' 只圈节点（默认），'render' 连标签一起圈 / contour bounds: node shapes only ('key', default) or with labels */
   contourBounds?: 'key' | 'render';
+  /**
+   * 嵌套轮廓（仿 DHG）：对每个节点，所属超边按成员数从小到大排，小超边在内、大超边在外，
+   * 节点每被包一层，外层轮廓在它周围多外扩 theme.contourNestStep，共享枢纽周围因此是一圈圈同心轮廓
+   * Nested contours (after DHG): for each node, its hyperedges are ordered by size, smaller inside and larger outside;
+   * each level a node is already wrapped in grows the next contour around it by theme.contourNestStep, so shared hubs get
+   * concentric contours
+   */
+  contourNesting?: boolean;
   /** 节点大小：固定（默认），或按所属超边数 / fixed node size (default) or scaled by degree */
   nodeSizeBy?: 'fixed' | 'degree';
   /**
@@ -166,6 +174,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     labelText = (d: NodeData) => String(d.id),
     contours = true,
     contourBounds = 'key',
+    contourNesting = false,
     nodeSizeBy = 'fixed',
     labelBy = 'uniform',
     layout: layoutSettings = {},
@@ -266,6 +275,19 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     });
     layoutHyperedges.push({ id, weight: he.weight || members.length, members });
   });
+
+  if (contourNesting) {
+    // 每个节点的轮廓按成员数排序（同样大小按出现顺序），第 k 层外扩 k 个步长
+    // Each node's contours by size (ties in order of appearance); level k grows by k steps
+    const contoursOf = new Map<ID, typeof plugins>();
+    plugins.forEach((p) => p.members.forEach((m: ID) => contoursOf.set(m, [...(contoursOf.get(m) || []), p])));
+    plugins.forEach((p) => (p.memberPadding = {}));
+    contoursOf.forEach((list, m) => {
+      [...list]
+        .sort((a, b) => a.members.length - b.members.length)
+        .forEach((p, level) => level && (p.memberPadding[m] = level * theme.contourNestStep));
+    });
+  }
 
   if (isGraph && graphEdges === 'binary') {
     const connected = new Set<ID>();

@@ -34,7 +34,7 @@ export interface ViewOptions extends SpecOptions {
   fallbackHeight?: number;
   /** 渲染后的视口：'center' 只居中（默认），'view' 缩放到撑满画布 / 'center' (default) centers only, 'view' zooms to fill the canvas */
   autoFit?: GraphOptions['autoFit'];
-  /** autoFit 为 'view' 时自动缩放的上限，避免只有几个节点的图被放得很大，默认 2 / zoom cap when fitting to view */
+  /** autoFit 为 'view' 时自动缩放的上限，避免只有几个节点的图被放大撑满，默认 1（不放大）/ zoom cap when fitting to view, default 1 (no enlarging) */
   maxFitZoom?: number;
   /** autoFit 为 'view' 时四周留白（像素），默认 24 / padding around the fitted view */
   fitPadding?: number;
@@ -95,11 +95,14 @@ const STYLE_KEYS = [
   'hyperedgeColors',
   'contours',
   'contourBounds',
+  'contourNesting',
   'theme',
   'hideOverlappingLabels',
 ] as const;
 // 影响布局的主题项（节点尺寸、标签字号）
 const LAYOUT_THEME_KEYS: (keyof HypergraphTheme)[] = ['nodeSize', 'largeNodeSize', 'largeGraphThreshold', 'labelFontSize'];
+
+const DEFAULT_MAX_FIT_ZOOM = 1;
 
 const isFitView = (autoFit: ViewOptions['autoFit']) =>
   autoFit === 'view' || (typeof autoFit === 'object' && autoFit?.type === 'view');
@@ -550,7 +553,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   let disposed = false;
   // 撑满画布时限制放大倍数：超过上限就按上限缩放并居中
   const clampFitZoom = async () => {
-    const max = options.maxFitZoom ?? 2;
+    const max = options.maxFitZoom ?? DEFAULT_MAX_FIT_ZOOM;
     if (graph.destroyed || !isFitView(options.autoFit) || graph.getZoom() <= max) return;
     await graph.zoomTo(max, false);
     await graph.fitCenter(false);
@@ -642,10 +645,12 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
         render();
         if (hadSelection) options.onSelect?.(null);
       } else if (STYLE_KEYS.some(changed)) {
-        restyle(changed('contourBounds'));
+        restyle(changed('contourBounds') || changed('contourNesting'));
       } else if (selectionChanged) {
         applySelection();
       }
+      // 放大上限变了，按新上限重新撑满画布 / refit with the new zoom cap
+      if (changed('maxFitZoom') && isFitView(options.autoFit)) view.fitView(false);
     },
     select(id) {
       if (id === null) return setSelected(null);
@@ -666,7 +671,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     },
     async fitView(animate = true) {
       if (graph.destroyed || !spec) return;
-      const max = options.maxFitZoom ?? 2;
+      const max = options.maxFitZoom ?? DEFAULT_MAX_FIT_ZOOM;
       await graph.fitView(undefined, animate ? { duration: 300 } : false);
       if (graph.getZoom() > max) {
         await graph.zoomTo(max, false);

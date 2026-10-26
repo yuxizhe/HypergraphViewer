@@ -111,6 +111,18 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                 <Row label={t("nodeSpacing")} relayout disabled={!hypergraphLayout}>
                     <Slider value={settings.nodeSpacing} min={10} max={100} step={5} onChange={set("nodeSpacing")} />
                 </Row>
+                <Row label={t("maxFitZoom")} disabled={isMatrix}>
+                    <span title={t("maxFitZoomHint")} className="flex items-center">
+                        <Slider
+                            value={settings.maxFitZoom}
+                            min={0.5}
+                            max={3}
+                            step={0.25}
+                            onChange={set("maxFitZoom")}
+                            format={(v) => `${v}×`}
+                        />
+                    </span>
+                </Row>
                 <Row label={t("graphEdges")} relayout disabled={mode !== "graph"}>
                     <Segmented
                         value={settings.graphEdges}
@@ -137,6 +149,11 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                         onChange={set("contourBounds")}
                         options={[["key", t("boundsKey")], ["render", t("boundsRender")]]}
                     />
+                </Row>
+                <Row label={t("contourNesting")} disabled={!isHyper || !settings.contours}>
+                    <span title={t("contourNestingHint")}>
+                        <Switch checked={settings.contourNesting} onChange={set("contourNesting")} />
+                    </span>
                 </Row>
                 <Row label={t("hyperedgeColorBy")} disabled={!hyperedgeColored}>
                     <Segmented
@@ -213,6 +230,11 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                                 ["allow", t("labelOverlapAllow")],
                             ]}
                         />
+                    </Row>
+                    <Row label={t("labelStripType")} relayout disabled={settings.labelMode === "none"}>
+                        <span title={t("labelStripTypeHint")}>
+                            <Switch checked={settings.labelStripType} onChange={set("labelStripType")} />
+                        </span>
                     </Row>
                     <Row label={t("labelMaxLength")} relayout disabled={settings.labelMode === "none"}>
                         <input
