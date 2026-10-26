@@ -258,7 +258,16 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   };
 
   graph.on('click', (e: any) => {
+    // 双指缩放后抬起手指的那次点击（见下方 onTouchUp）
+    if (Date.now() - pinchedAt < 300) return;
     const hit = hitOf(e);
+    // 触摸没有悬停：点一下等同鼠标悬停（高亮 + 悬停卡片），点空白处取消，不选中
+    if (e.pointerType === 'touch') {
+      tapped = !!hit;
+      hoverPointer(hit);
+      options.onHover?.(hit && e.client ? { ...hit, client: { x: e.client.x, y: e.client.y } } : null);
+      return;
+    }
     if (multi) {
       const additive = !!(e.shiftKey ?? e.nativeEvent?.shiftKey ?? e.originalEvent?.shiftKey);
       const next = nextSelection(selection, targetOf(hit), additive);
@@ -277,6 +286,14 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
 
   // 画布悬停高亮：与表格行悬停共用 hovered，只在悬停目标变化时重设状态
   let pointerKey = '';
+  // 触摸点出来的悬停还在；拖动、捏合画布时撤掉
+  let tapped = false;
+  const clearTap = () => {
+    if (!tapped) return;
+    tapped = false;
+    hoverPointer(null);
+    options.onHover?.(null);
+  };
   const hoverPointer = (hit: HypergraphHit | null) => {
     if (!options.hoverHighlight) return;
     const target: Partial<Selection> | null = !hit
@@ -295,6 +312,11 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   };
 
   graph.on('pointermove', (e: any) => {
+    // 触摸时 pointermove 是在拖动画布：悬停由点击设置（见上方 click），拖动时撤掉，免得卡片停在原处
+    if (e.pointerType === 'touch') {
+      clearTap();
+      return;
+    }
     const hit = e.client ? hitOf(e) : null;
     hoverPointer(hit);
     options.onHover?.(hit ? { ...hit, client: { x: e.client.x, y: e.client.y } } : null);
@@ -327,11 +349,80 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     }, 150);
   });
 
-  const onLeave = () => {
+  // 触摸每次抬起都会触发 pointerleave，不能因此撤掉点出来的悬停
+  const onLeave = (e?: PointerEvent) => {
+    if (e?.pointerType === 'touch') return;
     hoverPointer(null);
     options.onHover?.(null);
   };
   container.addEventListener('pointerleave', onLeave);
+
+  // 双指缩放：G6 的 drag-canvas 只跟一根手指，内置的捏合（zoom-canvas 的 pinch）按起始距离累乘倍率，越捏越快。
+  // 自己跟踪触点：两指时按两指距离之比缩放、随中点移动画布，并拦下这些事件，不让 G6 当成拖动或点击。
+  // 必须在 window 的捕获阶段拦：G 在 document 捕获阶段收 pointermove；支持触摸事件的设备上（手机）它不看触摸的
+  // pointer 事件，改收画布上的 touchstart/touchmove，把第二根手指也当拖动，画布会一下跳出两指间距那么远
+  host.style.touchAction = 'none';
+  const touches = new Map<number, { x: number; y: number }>();
+  // armed：两指刚落下时触点会抖（第二指落点和它第一次移动常差好几像素），距离或中点变化超过 PINCH_SLOP 才开始跟手，
+  // 并以那一刻为起点，免得落指的抖动变成一下跳动
+  const PINCH_SLOP = 8;
+  let pinch: { d: number; x: number; y: number; armed: boolean } | null = null;
+  let frame = 0;
+  const pinchOf = () => {
+    const [a, b] = [...touches.values()];
+    return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  // 两根手指各自触发 pointermove，每帧只按最新触点更新一次视图
+  const applyPinch = () => {
+    frame = 0;
+    if (!pinch || touches.size !== 2 || graph.destroyed) return;
+    const next = pinchOf();
+    if (!pinch.armed) {
+      if (Math.abs(next.d - pinch.d) < PINCH_SLOP && Math.hypot(next.x - pinch.x, next.y - pinch.y) < PINCH_SLOP) return;
+      pinch = { ...next, armed: true };
+      return;
+    }
+    const rect = host.getBoundingClientRect();
+    if (pinch.d > 0 && next.d > 0) {
+      graph.zoomTo((graph.getZoom() * next.d) / pinch.d, false, [next.x - rect.left, next.y - rect.top]);
+    }
+    graph.translateBy([next.x - pinch.x, next.y - pinch.y], false);
+    pinch = { ...next, armed: true };
+  };
+  const onTouchDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch' || !host.contains(e.target as Node)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) {
+      pinch = { ...pinchOf(), armed: false };
+      clearTap();
+    }
+    if (touches.size > 1) e.stopPropagation();
+  };
+  const onTouchMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!pinch) return;
+    e.stopPropagation();
+    if (!frame) frame = requestAnimationFrame(applyPinch);
+  };
+  // 抬起照常交给 G6（结束它的拖动），但随后的点击不算选中
+  let pinchedAt = 0;
+  const onTouchUp = (e: PointerEvent) => {
+    if (!touches.delete(e.pointerId) || !pinch) return;
+    pinchedAt = Date.now();
+    // 两指都抬起才结束：先抬一指时剩下那根不接着拖动画布
+    if (touches.size === 0) pinch = null;
+  };
+  // 触摸事件跟在同一触点的 pointer 事件之后，这时 pinch 已更新；touchend 照常放行，让 G 结束第一根手指的拖动
+  const onTouchEvent = (e: TouchEvent) => {
+    if ((pinch || e.touches.length > 1) && host.contains(e.target as Node)) e.stopPropagation();
+  };
+  window.addEventListener('pointerdown', onTouchDown, true);
+  window.addEventListener('pointermove', onTouchMove, true);
+  window.addEventListener('pointerup', onTouchUp, true);
+  window.addEventListener('pointercancel', onTouchUp, true);
+  window.addEventListener('touchstart', onTouchEvent, true);
+  window.addEventListener('touchmove', onTouchEvent, true);
 
   const observer = new ResizeObserver(() => {
     if (!graph.destroyed && container.offsetWidth && container.offsetHeight) {
@@ -580,6 +671,13 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
       observer.disconnect();
       container.removeEventListener('pointerleave', onLeave);
       spec = null;
+      window.removeEventListener('pointerdown', onTouchDown, true);
+      window.removeEventListener('pointermove', onTouchMove, true);
+      window.removeEventListener('pointerup', onTouchUp, true);
+      window.removeEventListener('pointercancel', onTouchUp, true);
+      window.removeEventListener('touchstart', onTouchEvent, true);
+      window.removeEventListener('touchmove', onTouchEvent, true);
+      cancelAnimationFrame(frame);
       host.remove();
       if (inflight) inflight.finally(() => destroyGraph(graph));
       else destroyGraph(graph);
