@@ -35,6 +35,8 @@ export interface HypergraphTheme {
   bubble: { normal: BubbleState; highlight: BubbleState; dimmed: BubbleState };
   /** bubble-sets 的路由与轮廓参数，默认贴紧节点（nodeR0 1 / nodeR1 5）/ bubble-sets routing and contour options */
   bubbleOptions: Record<string, unknown>;
+  /** 嵌套轮廓（contourNesting）中节点每被包一层，轮廓外扩的距离 / how far a contour grows per nesting level with contourNesting */
+  contourNestStep: number;
   /** 其他元素被选中时，节点、连线的透明度 / opacity of nodes and lines while something else is selected */
   inactiveNodeOpacity: number;
   inactiveEdgeOpacity: number;
@@ -98,6 +100,7 @@ export const DEFAULT_THEME: HypergraphTheme = {
     nonMemberInfluenceFactor: -0.8,
     virtualEdges: true,
   },
+  contourNestStep: 3,
   inactiveNodeOpacity: 0.15,
   inactiveEdgeOpacity: 0.1,
 };
