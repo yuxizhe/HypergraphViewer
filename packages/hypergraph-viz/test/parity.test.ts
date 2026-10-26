@@ -50,12 +50,15 @@ describe.each(centers)('vertex %s', (center) => {
     spec.data.nodes!.forEach((n) => expect(nodeFill(n)).toBe(legacyFill(n)));
   });
 
-  it('layout positions match the legacy layout', async () => {
+  // 布局已有意偏离旧版（送回困在别的超边里的节点），只对照节点集合 / The layout deliberately diverges from the legacy one
+  // (stranded nodes are sent back to their hyperedge), so only the node set is compared
+  it('layout places the same nodes as the legacy layout', async () => {
     const spec = toG6Spec(fromKeyedEdges(graph), { centerNode: center, typeColors });
     const options = { ...spec.layout, nodeSize: 20 };
     const data = { nodes: spec.data.nodes, edges: spec.data.edges };
     const result = await positions(HypergraphLayout, data, options);
     expect(result.every(([, x, y]: number[]) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
-    expect(result).toEqual(await positions(LegacyLayout, data, options));
+    const ids = (list: any[]) => list.map(([id]) => id);
+    expect(ids(result)).toEqual(ids(await positions(LegacyLayout, data, options)));
   });
 });
