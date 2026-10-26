@@ -145,3 +145,119 @@ export const filterHypergraph = (
   });
   return { vertices, hyperedges };
 };
+
+/**
+ * <zh/> 注定重叠的结构数（Qu et al. TVCG 2022 / HGPolyVis 的可无重叠绘制判定中的两种禁止结构）：
+ * 共享 ≥3 个成员的超边对、共同成员 ≥2 个的超边三元组。它们无论怎么布局都会重叠（轮廓、多边形皆然）
+ *
+ * <en/> Forced overlaps, two of the forbidden configurations of the overlap-free drawability criterion (Qu et al. TVCG 2022 /
+ * HGPolyVis): hyperedge pairs sharing ≥3 members and hyperedge triples with ≥2 common members. They overlap under any layout
+ */
+export interface ForcedOverlaps {
+  /** 共享 ≥3 个成员的超边对 / hyperedge pairs sharing 3+ members */
+  pairs: number;
+  /** 共同成员 ≥2 个的超边三元组 / hyperedge triples with 2+ common members */
+  triples: number;
+}
+
+// 成员列表（去重、至少 2 个）→ 注定重叠数；cap 为三元组计数上限，超过即停（贪心选择时只需比较大小）
+const countForcedOverlaps = (sets: ID[][], cap = Infinity): ForcedOverlaps => {
+  const edgesOf = new Map<ID, number[]>();
+  sets.forEach((set, e) => set.forEach((v) => edgesOf.set(v, [...(edgesOf.get(v) || []), e])));
+  // 超边两两共享的成员 / members shared by each pair of hyperedges
+  const shared = new Map<number, ID[]>();
+  const E = sets.length;
+  edgesOf.forEach((list, v) => {
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const key = list[i] * E + list[j];
+        const s = shared.get(key);
+        if (s) s.push(v);
+        else shared.set(key, [v]);
+      }
+    }
+  });
+  let pairs = 0;
+  let triples = 0;
+  const hits = new Map<number, number>();
+  for (const [key, common] of shared) {
+    if (common.length >= 3) pairs++;
+    if (common.length < 2 || triples >= cap) continue;
+    // 第三条超边 c > b 含其中 ≥2 个共同成员 / a third hyperedge c > b holding 2+ of the common members
+    const b = key % E;
+    hits.clear();
+    common.forEach((v) => edgesOf.get(v)!.forEach((c) => c > b && hits.set(c, (hits.get(c) || 0) + 1)));
+    hits.forEach((n) => n >= 2 && triples++);
+  }
+  return { pairs, triples };
+};
+
+const memberSets = (data: HypergraphData, hidden: Set<ID> = new Set()) => {
+  const sets: ID[][] = [];
+  data.hyperedges.forEach((he) => {
+    const m = [...new Set(he.members)].filter((id) => id in data.vertices && !hidden.has(id));
+    if (m.length >= 2) sets.push(m);
+  });
+  return sets;
+};
+
+/**
+ * <zh/> 统计超图中注定重叠的结构
+ *
+ * <en/> Count the forced overlaps of a hypergraph
+ */
+export const forcedOverlaps = (data: HypergraphData): ForcedOverlaps => countForcedOverlaps(memberSets(data));
+
+/**
+ * <zh/> 贪心挑出隐含枢纽：每轮在度数最高的若干实体中，去掉后注定重叠（对 + 三元组）减少最多的那个，
+ * 直到注定重叠不超过超边数的 tolerance（零星几处不值得为此隐藏实体）、减少量不足最初的 minGain，或已挑出 maxHubs 个。比按度数阈值隐藏更有针对性：只去掉真正造成重叠的实体
+ *
+ * <en/> Greedily pick implicit hubs: each round, among the highest-degree vertices, the one whose removal cuts forced overlaps
+ * (pairs + triples) the most, until they are within tolerance of the hyperedge count (a few are not worth hiding a vertex),
+ * the cut falls below minGain of the initial count, or maxHubs are picked. Unlike a degree
+ * threshold, only vertices that actually cause overlaps are removed
+ */
+export const overlapHubs = (
+  data: HypergraphData,
+  {
+    maxHubs = 8,
+    minGain = 0.05,
+    tolerance = 0.1,
+    candidates = 12,
+  }: { maxHubs?: number; minGain?: number; tolerance?: number; candidates?: number } = {},
+): { hubs: ID[]; before: ForcedOverlaps; after: ForcedOverlaps } => {
+  const hidden = new Set<ID>();
+  const total = (o: ForcedOverlaps) => o.pairs + o.triples;
+  const initialSets = memberSets(data);
+  const before = countForcedOverlaps(initialSets);
+  let current = before;
+  const threshold = Math.max(1, minGain * total(before));
+  const allowed = tolerance * initialSets.length;
+  while (hidden.size < maxHubs && total(current) > allowed) {
+    const sets = memberSets(data, hidden);
+    const degree = new Map<ID, number>();
+    sets.forEach((set) => set.forEach((v) => degree.set(v, (degree.get(v) || 0) + 1)));
+    const pool = [...degree]
+      .filter(([, d]) => d >= 3)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, candidates)
+      .map(([id]) => id);
+    // 同样有效时取度数高的（pool 按度数降序）/ ties go to the higher degree (pool is by degree, descending)
+    let bestId: ID | null = null;
+    let bestTotal = Infinity;
+    for (const id of pool) {
+      hidden.add(id);
+      const overlaps = total(countForcedOverlaps(memberSets(data, hidden), bestTotal));
+      hidden.delete(id);
+      if (overlaps < bestTotal) {
+        bestId = id;
+        bestTotal = overlaps;
+      }
+    }
+    if (bestId === null || total(current) - bestTotal < threshold) break;
+    hidden.add(bestId);
+    // 带上限的计数只用于比较，选定后重算准确值 / capped counts are for comparison only; recount exactly
+    current = countForcedOverlaps(memberSets(data, hidden));
+  }
+  return { hubs: [...hidden], before, after: current };
+};

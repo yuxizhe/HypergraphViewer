@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 // 右侧面板「渲染」Tab 的默认值；与 hypergraph-viz 的默认行为一致
 export const DEFAULT_RENDER_SETTINGS = {
-    layout: "hypergraph", // hypergraph | force | force-atlas2 | circular
+    layout: "hypergraph", // hypergraph | polygon（多边形画法 HGPolyVis）| force | force-atlas2 | circular
     useCenter: true,
     nodeSpacing: 50,
     maxFitZoom: 1, // 撑满画布时的最大放大倍数：节点少时不放大
@@ -15,7 +15,9 @@ export const DEFAULT_RENDER_SETTINGS = {
     fillOpacity: 0.2,
     nodeColorBy: "type", // type | uniform
     nodeSizeBy: "degree", // fixed | degree（子图内度数越大节点越大）
-    autoHideDegree: 30, // 打开子图时自动隐藏子图内度数超过它的实体（含中心），0 不隐藏
+    // 打开子图时自动隐藏（淡出）的实体，含中心：overlap 按注定重叠贪心挑隐含枢纽 / degree 度数超过 autoHideDegree 的 / off 不隐藏
+    autoHideBy: "overlap",
+    autoHideDegree: 30, // autoHideBy 为 degree 时的阈值，0 不隐藏
     labelMode: "all", // all | key（中心与枢纽）| none
     labelFontSize: 10,
     labelBy: "degree", // uniform | degree（子图内度数越大标签字号越大、颜色越深）

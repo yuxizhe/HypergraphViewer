@@ -1,6 +1,6 @@
 import type { EdgeData, GraphOptions, ID, NodeData } from '@antv/g6';
 import { HOVER_BUBBLE_SETS } from './hover-bubble-sets';
-import { HYPERGRAPH_LAYOUT } from './register';
+import { HYPERGRAPH_LAYOUT, POLYGON_LAYOUT } from './register';
 import type { HypergraphTheme } from './theme';
 import { resolveTheme, typeColorsOf } from './theme';
 import { hyperedgeIdOf } from './analysis';
@@ -30,14 +30,16 @@ export interface HypergraphData {
 export type HypergraphMode = 'hyper' | 'graph';
 
 /**
- * <zh/> 布局设置。超图模式默认 'hypergraph'；'force' 为改造前的力导 + 主超边聚类；图模式下 'hypergraph' 按 'force' 处理
+ * <zh/> 布局设置。超图模式默认 'hypergraph'；'polygon' 为多边形画法（HGPolyVis）：超图布局 + 多边形优化，超边画成成员在角上的多边形；
+ * 'force' 为改造前的力导 + 主超边聚类；图模式下 'hypergraph'、'polygon' 按 'force' 处理
  *
- * <en/> Layout settings. Hyper mode defaults to 'hypergraph'; 'force' is the former force layout clustered by primary hyperedge;
- * in graph mode 'hypergraph' falls back to 'force'
+ * <en/> Layout settings. Hyper mode defaults to 'hypergraph'; 'polygon' is the polygon drawing (HGPolyVis): the hypergraph layout
+ * plus polygon optimization, with each hyperedge drawn as a polygon whose corners are its members; 'force' is the former force
+ * layout clustered by primary hyperedge; in graph mode 'hypergraph' and 'polygon' fall back to 'force'
  */
 export interface LayoutSettings {
-  type?: 'hypergraph' | 'force' | 'force-atlas2' | 'circular';
-  /** 节点间距（超图布局），默认 50 / node spacing of the hypergraph layout, defaults to 50 */
+  type?: 'hypergraph' | 'polygon' | 'force' | 'force-atlas2' | 'circular';
+  /** 节点间距（超图布局、多边形布局），默认 50 / node spacing of the hypergraph and polygon layouts, defaults to 50 */
   nodeSpacing?: number;
   /** 标签防重叠（超图布局），默认开 / prevent label overlap in the hypergraph layout, on by default */
   preventLabelOverlap?: boolean;
@@ -181,6 +183,8 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   } = options;
   const theme = resolveTheme(options.theme);
   const isGraph = mode === 'graph';
+  // 多边形画法：超边画成成员在角上的多边形 / polygon drawing: hyperedges as polygons with members at the corners
+  const polygon = !isGraph && layoutSettings.type === POLYGON_LAYOUT;
 
   const fadedSet = new Set((options.fadedNodes || []).filter((id) => id in graph.vertices));
   const allNodes: NodeData[] = Object.entries(graph.vertices).map(([id, value]) => ({ ...value, id, label: id }));
@@ -272,11 +276,13 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       stroke: color,
       ...theme.bubbleOptions,
       ...theme.bubble.normal,
+      // 大的多边形在下、小的在上 / larger polygons below smaller ones
+      ...(polygon && { polygon: true, zIndex: -1 - members.length / 1000, lineJoin: 'round', ...theme.polygonStroke.normal }),
     });
     layoutHyperedges.push({ id, weight: he.weight || members.length, members });
   });
 
-  if (contourNesting) {
+  if (contourNesting && !polygon) {
     // 每个节点的轮廓按成员数排序（同样大小按出现顺序），第 k 层外扩 k 个步长
     // Each node's contours by size (ties in order of appearance); level k grows by k steps
     const contoursOf = new Map<ID, typeof plugins>();
@@ -369,10 +375,10 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     layout = { type: 'circular', ...sizeOption };
   } else if (layoutType === 'force-atlas2') {
     layout = { type: 'force-atlas2', preventOverlap: true, kr: 50, ...sizeOption };
-  } else if (!isGraph && layoutType === HYPERGRAPH_LAYOUT) {
-    // 超图布局，连线也作为 2 元超边参与，以中心实体为中心呈花瓣状排布
+  } else if (!isGraph && (layoutType === HYPERGRAPH_LAYOUT || layoutType === POLYGON_LAYOUT)) {
+    // 超图布局，连线也作为 2 元超边参与，以中心实体为中心呈花瓣状排布；多边形布局在此基础上再做多边形优化
     layout = {
-      type: HYPERGRAPH_LAYOUT,
+      type: layoutType,
       hyperedges: layoutHyperedges,
       centerNode: layoutCenter,
       nodeSpacing: layoutSettings.nodeSpacing ?? 50,

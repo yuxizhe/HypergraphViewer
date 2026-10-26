@@ -46,7 +46,7 @@ const InspectorPanel = ({
     compact = false,
 }) => {
     const { t } = useI18n();
-    const [open, setOpen] = useState({ stats: false, matrix: true, nodes: true, hyperedges: true, render: false });
+    const [open, setOpen] = useState({ stats: true, matrix: true, nodes: true, hyperedges: true, render: false });
     const [collapsed, setCollapsed] = useState(false);
     const [detailsOpen, setDetailsOpen] = useState(false);
     // 侧栏矩阵的悬停卡片
@@ -246,23 +246,13 @@ const InspectorPanel = ({
                                 visibleStats={visibleStats}
                                 typeOf={typeOf}
                                 colorOfType={colors.typeColorOf}
-                                centerNode={centerNode}
-                                hidden={hidden}
                                 onPick={pick}
-                                // 枢纽淡出：画布上不画，悬停、选中相关元素时显示关联
-                                onToggleHubs={(ids, hide) => setHidden((h) => ({
-                                    ...h,
-                                    nodes: hide ? [...new Set([...h.nodes, ...ids])] : h.nodes.filter((id) => !ids.includes(id)),
-                                    faded: hide
-                                        ? [...new Set([...(h.faded || []), ...ids])]
-                                        : (h.faded || []).filter((id) => !ids.includes(id)),
-                                }))}
                             />
                         </Section>
                         {/* 画布不是矩阵时，侧栏显示同一子图的关联矩阵 */}
                         {matrix && mode !== "matrix" && matrix.data && (
                             <Section title={t("tab_matrix")} open={open.matrix} onToggle={toggle("matrix")}>
-                                <div className="h-72 -mx-1">
+                                <div className="h-52 -mx-1">
                                     <IncidenceMatrixView
                                         ref={matrix.ref}
                                         data={matrix.data}

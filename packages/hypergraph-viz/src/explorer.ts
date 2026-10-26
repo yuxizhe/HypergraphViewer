@@ -32,8 +32,8 @@ export interface ExplorerOptions {
   defaultCenter?: ID;
   /** 打开子图时默认彻底隐藏的实体类型 / vertex types hidden when a subgraph opens */
   hiddenTypes?: string[];
-  /** 「渲染」设置的默认值，覆盖 DEFAULT_RENDER_SETTINGS 中的项，如 { autoHideDegree: 0 } 不自动隐藏高度数实体 /
-   *  overrides of DEFAULT_RENDER_SETTINGS, e.g. { autoHideDegree: 0 } to keep high-degree vertices */
+  /** 「渲染」设置的默认值，覆盖 DEFAULT_RENDER_SETTINGS 中的项，如 { autoHideBy: 'off' } 不自动隐藏枢纽 /
+   *  overrides of DEFAULT_RENDER_SETTINGS, e.g. { autoHideBy: 'off' } to keep hub vertices */
   defaultRenderSettings?: Record<string, unknown>;
   /** 渲染设置、颜色存到 localStorage 的键前缀，默认 'hypergraph-viewer'；false 不存 / localStorage key prefix, false to disable */
   storageKey?: string | false;

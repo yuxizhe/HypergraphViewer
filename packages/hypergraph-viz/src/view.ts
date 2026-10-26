@@ -218,10 +218,12 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
 
   // 按选择与悬停给轮廓插件配置透明度档位
   const decoratePlugins = (plugins: any[], bubbles: Record<ID, string>) => {
-    const { bubble } = resolveTheme(options.theme);
-    return plugins.map((p: any) =>
-      p.type !== HOVER_BUBBLE_SETS ? p : { ...p, ...(bubble as any)[bubbles[p.hyperedge?.id] ?? 'normal'] },
-    );
+    const { bubble, polygonStroke } = resolveTheme(options.theme);
+    return plugins.map((p: any) => {
+      if (p.type !== HOVER_BUBBLE_SETS) return p;
+      const level = bubbles[p.hyperedge?.id] ?? 'normal';
+      return { ...p, ...(bubble as any)[level], ...(p.polygon && (polygonStroke as any)[level]) };
+    });
   };
 
   // 被避让的节点加上 labelHidden 状态（高亮、悬停的除外）

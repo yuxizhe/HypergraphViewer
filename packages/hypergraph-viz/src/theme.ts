@@ -33,6 +33,8 @@ export interface HypergraphTheme {
   labelDegreeFill: [string, string];
   /** 超边轮廓：常态 / 点击选中 / 其他超边被选中时变淡 / contour: normal, selected, another one selected */
   bubble: { normal: BubbleState; highlight: BubbleState; dimmed: BubbleState };
+  /** 多边形画法（layout.type: 'polygon'）在 bubble 各档之上的描边：边要看得清，才分得开叠在一起的多边形 / polygon outlines over the bubble levels */
+  polygonStroke: Record<'normal' | 'highlight' | 'dimmed', Pick<BubbleState, 'strokeOpacity' | 'lineWidth'>>;
   /** bubble-sets 的路由与轮廓参数，默认贴紧节点（nodeR0 1 / nodeR1 5）/ bubble-sets routing and contour options */
   bubbleOptions: Record<string, unknown>;
   /** 嵌套轮廓（contourNesting）中节点每被包一层，轮廓外扩的距离 / how far a contour grows per nesting level with contourNesting */
@@ -85,6 +87,11 @@ export const DEFAULT_THEME: HypergraphTheme = {
     highlight: { fillOpacity: 0.45, strokeOpacity: 1, lineWidth: 3 },
     dimmed: { fillOpacity: 0.03, strokeOpacity: 0.05, lineWidth: 1 },
   },
+  polygonStroke: {
+    normal: { strokeOpacity: 0.8, lineWidth: 2 },
+    highlight: { strokeOpacity: 1, lineWidth: 3 },
+    dimmed: { strokeOpacity: 0.08, lineWidth: 1 },
+  },
   bubbleOptions: {
     maxRoutingIterations: 100,
     maxMarchingIterations: 20,
@@ -109,6 +116,7 @@ export const resolveTheme = (theme?: Partial<HypergraphTheme>): HypergraphTheme 
   ...DEFAULT_THEME,
   ...theme,
   bubble: { ...DEFAULT_THEME.bubble, ...theme?.bubble },
+  polygonStroke: { ...DEFAULT_THEME.polygonStroke, ...theme?.polygonStroke },
   bubbleOptions: { ...DEFAULT_THEME.bubbleOptions, ...theme?.bubbleOptions },
 });
 

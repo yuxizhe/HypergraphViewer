@@ -16,6 +16,8 @@ DEMO page: https://yuxizhe.github.io/HypergraphViewer/
   - Hyperedges with 3+ members are drawn as contours around their nodes only (labels excluded), 2-member hyperedges as lines
   - Overlapping labels are hidden until hover or selection by default; the layout can also make room for every label
   - The same data always gives the same layout; force, ForceAtlas2 and circular layouts are also available in the Render panel
+  - Polygon layout (after [HGPolyVis](https://arxiv.org/abs/2308.05043)): each hyperedge is a polygon with its members at the corners, refined toward regular, non-overlapping polygons
+  - Hubs are faded out when a subgraph opens: the vertices behind forced overlaps (hyperedge pairs sharing 3+ members, triples sharing 2+), which overlap under any layout
 - 🧮 **Incidence Matrix**: one row per vertex, one column per hyperedge, members as dots joined by a line in the hyperedge's color:
   - Hubs that crowd the canvas are just full rows, so every hyperedge stays readable
   - Rows and columns ordered by degree, grouped by type, or clustered so related vertices and hyperedges sit together
