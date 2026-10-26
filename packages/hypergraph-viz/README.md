@@ -97,7 +97,9 @@ import { IncidenceMatrixView } from 'hypergraph-viz/react';
 viewRef.current.fitView();           // 视图居中
 ```
 
-`layout.type` 还可以是 `'force'`（改造前的力导 + 主超边聚类）、`'force-atlas2'`、`'circular'`。
+`layout.type` 还可以是 `'polygon'`（多边形画法，参考 HGPolyVis：在超图布局上优化，超边画成成员在角上的多边形）、
+`'force'`（改造前的力导 + 主超边聚类）、`'force-atlas2'`、`'circular'`。
+`overlapHubs(graph)` 贪心挑出造成注定重叠的隐含枢纽，可传给 `fadedNodes`；`forcedOverlaps(graph)` 统计注定重叠数。
 数据或布局相关选项变化时重新布局；只有颜色、轮廓、主题配色变化时只重绘，节点位置不变。
 对象类选项（`typeColors`、`layout`、`theme` 等）需由宿主保持引用稳定（`useMemo`）。
 
@@ -117,7 +119,7 @@ import 'hypergraph-viz/style.css';   // 选择器都限定在 .hv-root 下，宿
   layout="auto"                              // 按自身宽度：≥ 1200 三栏；≥ 768 左栏抽屉、右栏浮层；更窄（手机）面板从底部弹出
   localeStorageKey="my-app-lang"             // 浏览器自己管理语言：记住选择，标题栏可切换；或传 locale + onLocaleChange 由宿主管理
   messages={{ zh: { neighborhoodCol: '度数' } }}   // 覆盖或补充界面文字
-  defaultRenderSettings={{ autoHideDegree: 0 }}   // 「渲染」设置的默认值；0 表示不自动隐藏高度数实体（默认隐藏度数 > 30 的）
+  defaultRenderSettings={{ autoHideBy: 'off' }}   // 「渲染」设置的默认值；'off' 不自动隐藏枢纽（默认 'overlap' 按注定重叠挑隐含枢纽，'degree' 按 autoHideDegree）
   storageKey="my-app"                        // 渲染设置、颜色存到 localStorage；false 不存
   title="My Hypergraph"
   databaseHeader={<Section title="数据源" open onToggle={...}>...</Section>}  // 左栏顶部插槽
@@ -190,7 +192,7 @@ mountAdmin(document.getElementById('admin'), { api: createHttpAdminApi('/api/adm
 
 ## 只用其中一部分
 
-`registerHypergraph()` 注册 `'hypergraph'` 布局与 `'hover-bubble-sets'` 插件，`toG6Spec(data, options)` 生成 G6 的 data / node / edge / layout / plugins，可自行创建 Graph。
+`registerHypergraph()` 注册 `'hypergraph'`、`'polygon'` 布局与 `'hover-bubble-sets'` 插件，`toG6Spec(data, options)` 生成 G6 的 data / node / edge / layout / plugins，可自行创建 Graph。
 
 ## 开发
 
