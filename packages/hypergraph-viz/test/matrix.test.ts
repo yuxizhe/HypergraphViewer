@@ -92,6 +92,10 @@ describe("graphEdges: 'star'", () => {
     expect((spec.node as any).type({ id: 'a' })).toBe('circle');
     expect(style.labelText(he)).toBe('');
     expect(style.labelText({ id: 'a' })).toBe('a');
+    // 边长与成员数成正比：3 个成员与实体节点一样大，4 个成员为 4/3 倍
+    const e5 = spec.data.nodes!.find((n) => n.id === hyperedgeNodeId('e5'))!;
+    expect(style.size(he)).toBe(style.size({ id: 'a' }));
+    expect(style.size(e5)).toBe(Math.round((style.size({ id: 'a' }) * 4) / 3));
   });
 
   it('选中超边：它的超边节点与连线高亮，其余超边节点变淡', () => {

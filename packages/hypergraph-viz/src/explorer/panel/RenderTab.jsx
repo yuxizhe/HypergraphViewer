@@ -116,9 +116,9 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                         value={settings.graphEdges}
                         onChange={set("graphEdges")}
                         options={[
+                            ["star", t("graphEdgesStar")],
                             ["binary", t("graphEdgesBinary")],
                             ["clique", t("graphEdgesClique")],
-                            ["star", t("graphEdgesStar")],
                         ]}
                     />
                 </Row>

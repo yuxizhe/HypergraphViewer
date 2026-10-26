@@ -310,14 +310,15 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   // 按度数：0.7 倍到 1.5 倍
   let sizeOf: number | ((d: NodeData) => number) = baseSize;
   if (nodeSizeBy === 'degree') sizeOf = (d: NodeData) => Math.round(baseSize * (0.7 + 0.8 * levelOf(d.id)));
-  // 超边节点（graphEdges: 'star'）：菱形，按成员数略增大，不带标签（悬停卡片显示超边属性）
+  // 超边节点（graphEdges: 'star'）：菱形，边长与成员数成正比（3 个成员与实体节点一样大），最大为实体节点的 3 倍；
+  // 不带标签（悬停卡片显示超边属性）
   const isHyperedgeNode = (d: NodeData) => hyperedgeNodes.has(d.id);
   const hasStar = hyperedgeNodes.size > 0;
   if (hasStar) {
     const vertexSize = sizeOf;
     sizeOf = (d: NodeData) =>
       isHyperedgeNode(d)
-        ? Math.round(baseSize * Math.min(0.9, 0.45 + 0.05 * (d.memberCount as number)))
+        ? Math.round(baseSize * Math.min(3, (d.memberCount as number) / 3))
         : typeof vertexSize === 'function'
           ? vertexSize(d)
           : vertexSize;
@@ -339,7 +340,8 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
 
   const layoutType = layoutSettings.type ?? (isGraph ? 'force' : HYPERGRAPH_LAYOUT);
   const layoutCenter = hasCenter && layoutSettings.useCenter !== false ? centerNode : undefined;
-  const sizeOption = nodeSizeBy === 'degree' ? { nodeSize: sizeOf } : {};
+  // 节点大小不一时布局按各自大小防重叠
+  const sizeOption = nodeSizeBy === 'degree' || hasStar ? { nodeSize: sizeOf } : {};
   let layout: Record<string, any>;
   if (layoutType === 'circular') {
     layout = { type: 'circular', ...sizeOption };

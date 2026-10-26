@@ -59,7 +59,7 @@ const colors = hyperedgeColorsOf(graph);                       // 在完整数�
 ### 图模式与二部图
 
 `mode="graph"` 只画连线、力导布局。3 个及以上成员的超边由 `graphEdges` 决定：`'binary'`（默认）丢弃，`'clique'` 拆成两两连线，
-`'star'` 画成一个菱形的超边节点、连向各成员（二部图 / 关联图，同 SimpleHypergraphs.jl、HAT 的画法）。超边节点与连线用该超边的颜色，
+`'star'` 画成一个菱形的超边节点、连向各成员（二部图 / 关联图，同 SimpleHypergraphs.jl、HAT 的画法）。超边节点的边长与成员数成正比（3 个成员与实体节点一样大，最大为 3 倍），节点与连线用该超边的颜色，
 悬停、点击时按超边报告（`kind: 'hyperedge'`），选中、表格行悬停的高亮与轮廓一致。超边节点的 id 为 `hyperedgeNodeId(超边 id)`。
 
 ### 关联矩阵
