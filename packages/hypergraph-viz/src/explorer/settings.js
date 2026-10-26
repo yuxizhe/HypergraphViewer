@@ -5,7 +5,8 @@ export const DEFAULT_RENDER_SETTINGS = {
     layout: "hypergraph", // hypergraph | force | force-atlas2 | circular
     useCenter: true,
     nodeSpacing: 50,
-    graphEdges: "binary", // 图模式下 3 元及以上超边：binary 丢弃 / clique 拆成两两连线
+    graphEdges: "binary", // 图模式下 3 元及以上超边：binary 丢弃 / clique 拆成两两连线 / star 超边节点（二部图）
+    matrixOrder: "degree", // 关联矩阵的行列排序：degree | type | cluster
     contours: true,
     contourBounds: "key", // key 只圈节点 / render 包含标签
     hyperedgeColorBy: "hyperedge", // hyperedge | type

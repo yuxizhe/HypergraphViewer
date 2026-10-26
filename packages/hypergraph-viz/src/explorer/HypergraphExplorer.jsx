@@ -12,23 +12,28 @@ const Counts = ({ explorer, className = "" }) => {
     const { t } = useI18n();
     const { mode, hypergraph, visibleHypergraph, hidden, lineCount } = explorer;
     if (!visibleHypergraph) return null;
+    // 图模式下 3 元及以上超边画成超边节点时也按超边计数
+    const byHyperedge = mode !== "graph" || explorer.inspectorProps.settings.graphEdges === "star";
     return (
         <div className={`text-sm text-gray-600 ${className}`}>
             <span className="font-semibold">{t("verticesLabel")}</span> {Object.keys(visibleHypergraph.vertices).length}
             {hidden.nodes.length > 0 && ` / ${Object.keys(hypergraph.vertices).length}`} |
-            <span className="font-semibold ml-1">{t(mode === "hyper" ? "hyperedgesLabel" : "edgesLabel")}</span>{" "}
-            {mode === "hyper" ? visibleHypergraph.hyperedges.length : lineCount}
-            {mode === "hyper" && visibleHypergraph.hyperedges.length !== hypergraph.hyperedges.length && ` / ${hypergraph.hyperedges.length}`}
+            <span className="font-semibold ml-1">{t(byHyperedge ? "hyperedgesLabel" : "edgesLabel")}</span>{" "}
+            {byHyperedge ? visibleHypergraph.hyperedges.length : lineCount}
+            {byHyperedge && visibleHypergraph.hyperedges.length !== hypergraph.hyperedges.length && ` / ${hypergraph.hyperedges.length}`}
         </div>
     );
 };
+
+// 模式 → [模式名, 标题]
+const MODE_KEYS = { hyper: ["modeHyper", "titleHyper"], graph: ["modeGraph", "titleGraph"], matrix: ["modeMatrix", "titleMatrix"] };
 
 const ModeSwitch = ({ explorer, small }) => {
     const { t } = useI18n();
     const { mode, setMode } = explorer;
     return (
         <div className="flex space-x-1 shrink-0">
-            {["hyper", "graph"].map((m) => (
+            {["hyper", "matrix", "graph"].map((m) => (
                 <button
                     key={m}
                     onClick={() => setMode(m)}
@@ -36,7 +41,7 @@ const ModeSwitch = ({ explorer, small }) => {
                         mode === m ? "bg-primary-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
-                    {t(m === "hyper" ? "modeHyper" : "modeGraph")}
+                    {t(MODE_KEYS[m][0])}
                 </button>
             ))}
         </div>
@@ -93,7 +98,7 @@ const Header = ({ explorer, extra, layout, onOpenDatabase, inspectorOpen, onTogg
         return (
             <div className="relative bg-white/95 px-3 py-2 border-b border-gray-200/50 flex items-center gap-2 shadow-sm shrink-0">
                 <h3 className="flex-1 min-w-0 text-base font-semibold text-gray-800 m-0 truncate">
-                    {centerNode || t(mode === "hyper" ? "titleHyper" : "titleGraph")}
+                    {centerNode || t(MODE_KEYS[mode][1])}
                 </h3>
                 <ModeSwitch explorer={explorer} small />
                 <IconButton path={ICONS.more} label={t("more")} active={menuOpen} onClick={() => setMenuOpen((o) => !o)} />
@@ -116,7 +121,7 @@ const Header = ({ explorer, extra, layout, onOpenDatabase, inspectorOpen, onTogg
             <div className="flex items-center gap-4 min-w-0">
                 {onOpenDatabase && <IconButton path={ICONS.list} label={t("navVertices")} onClick={onOpenDatabase} />}
                 <h3 className={`${layout === "medium" ? "text-lg" : "text-xl"} font-semibold text-gray-800 m-0 truncate`}>
-                    {t(mode === "hyper" ? "titleHyper" : "titleGraph")} {centerNode && `- ${centerNode}`}
+                    {t(MODE_KEYS[mode][1])} {centerNode && `- ${centerNode}`}
                 </h3>
 
                 <div className="flex items-center gap-2 shrink-0">

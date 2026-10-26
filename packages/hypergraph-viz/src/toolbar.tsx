@@ -2,6 +2,9 @@ import type { CSSProperties, RefObject } from 'react';
 import { useEffect, useState } from 'react';
 import type { HypergraphView as View } from './view';
 
+// 工具栏操作的视图：画布（缩放 G6 画布）或关联矩阵（zoomBy 改单元格大小）
+type ZoomableView = Pick<View, 'fitView'> & { graph?: Pick<View['graph'], 'zoomBy'>; zoomBy?: (ratio: number) => void };
+
 export interface ToolbarOptions {
   /**
    * 'small'：小号（按钮更小、贴边，平时半透明，全屏时恢复正常大小），用于小画布；'large'：大号，便于手指点按 /
@@ -73,7 +76,7 @@ export const Toolbar = ({
   target,
   options,
 }: {
-  viewRef: RefObject<View | null>;
+  viewRef: RefObject<ZoomableView | null>;
   /** 全屏的元素；null 不显示全屏按钮 */
   target: RefObject<HTMLElement | null> | null;
   options: ToolbarOptions;
@@ -116,7 +119,11 @@ export const Toolbar = ({
       refit();
     }
   };
-  const zoom = (ratio: number) => viewRef.current?.graph.zoomBy(ratio, { duration: 200 });
+  const zoom = (ratio: number) => {
+    const view = viewRef.current;
+    if (view?.zoomBy) view.zoomBy(ratio);
+    else view?.graph?.zoomBy(ratio, { duration: 200 });
+  };
 
   // 小号平时半透明，指针移上去才完全显示，少挡住小画布；全屏时恢复正常大小
   const small = options.size === 'small' && !fullscreen;
