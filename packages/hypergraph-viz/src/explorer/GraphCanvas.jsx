@@ -51,12 +51,28 @@ const HiddenChips = ({ chips, onRestore, onRestoreAll, compact }) => {
     );
 };
 
+// MR 模式的图例：画布上不画的信息（淡出的枢纽属于哪些超边、未画出的超边），导出的图片下方也有同样的文字
+const ModelReadableLegend = ({ lines }) => {
+    const { t } = useI18n();
+    if (!lines.length) return null;
+    return (
+        <div className="absolute top-2 left-2 z-10 max-w-[60%] max-h-[40%] overflow-auto px-2 py-1.5 rounded border border-gray-300 bg-white/90 text-xs text-gray-800 shadow-sm">
+            <div className="font-semibold mb-0.5">{t("mrLegend")}</div>
+            {lines.map((line) => (
+                <div key={line}>{line}</div>
+            ))}
+        </div>
+    );
+};
+
 const GraphContainer = ({
     hypergraph,
     data,
     viewRef,
     viewOptions,
     matrixOrder,
+    matrixLabels,
+    mrLegend,
     selection,
     onSelectionChange,
     pinned,
@@ -116,6 +132,7 @@ const GraphContainer = ({
                     nodeColors={viewOptions.nodeColors}
                     hyperedgeColors={viewOptions.hyperedgeColors}
                     hubNodes={viewOptions.fadedNodes}
+                    {...matrixLabels}
                     rowHeaderWidth={compact ? 120 : 168}
                     // 底部「已隐藏」标签条不挡住最后几行
                     bottomPadding={hiddenChips.length ? (compact ? 40 : 64) : 8}
@@ -143,6 +160,7 @@ const GraphContainer = ({
                     toolbar={{ locale: lang, fullscreen: rootRef, size: compact ? "large" : "default" }}
                 />
             )}
+            {viewOptions.mode !== "matrix" && <ModelReadableLegend lines={mrLegend?.(lang) ?? []} />}
             <HiddenChips chips={hiddenChips} onRestore={onRestore} onRestoreAll={onRestoreAll} compact={compact} />
             {tip && (
                 <HoverTip

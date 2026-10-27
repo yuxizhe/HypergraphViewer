@@ -11,6 +11,9 @@ import type { HypergraphTheme } from './theme';
 import { resolveTheme, typeColorsOf } from './theme';
 import { Toolbar, type ToolbarOptions } from './toolbar';
 import type { HypergraphHit } from './view';
+import type { ExportedImage, ExportImageOptions } from './export-image';
+import { exportMatrixImage } from './export-image';
+import type { MatrixSVGOptions } from './matrix-svg';
 
 export interface IncidenceMatrixViewProps {
   data: HypergraphData;
@@ -62,6 +65,11 @@ export interface IncidenceMatrixHandle {
   /** 单元格大小回到适应容器 / fit the cell size to the container again */
   fitView(animate?: boolean): Promise<void>;
   zoomBy(ratio: number): void;
+  /**
+   * 导出为 PNG（V-mat）：排序、颜色、行列标签取视图的属性，options 中的项优先（如 modelReadable、showDegree）
+   * Export as a PNG (V-mat) with the view's order, colors and labels; options win (e.g. modelReadable, showDegree)
+   */
+  exportImage(options?: MatrixSVGOptions & ExportImageOptions): Promise<ExportedImage>;
 }
 
 const MIN_CELL = 6;
@@ -228,6 +236,11 @@ export const IncidenceMatrixView = forwardRef<IncidenceMatrixHandle | null, Inci
       scrollRef.current?.scrollTo({ left: 0, top: 0 });
     },
     zoomBy,
+    exportImage: (options) =>
+      exportMatrixImage(data, {
+        order, typeField, centerNode, typeColors, nodeColors, hyperedgeColors, hubNodes, labelText, columnLabel, theme: themeProp,
+        ...options,
+      }),
   };
   // 句柄经 ref 转发到最新的闭包
   const handleRef = useRef(handle);
@@ -239,6 +252,7 @@ export const IncidenceMatrixView = forwardRef<IncidenceMatrixHandle | null, Inci
       select: (id) => handleRef.current.select(id),
       fitView: (animate) => handleRef.current.fitView(animate),
       zoomBy: (ratio) => handleRef.current.zoomBy(ratio),
+      exportImage: (options) => handleRef.current.exportImage(options),
     }),
     [],
   );

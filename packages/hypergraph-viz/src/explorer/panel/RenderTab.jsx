@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useI18n } from '../i18n.jsx';
 
 const Tag = ({ relayout }) => {
@@ -68,8 +68,12 @@ const Group = ({ title, children }) => (
 );
 
 // 渲染设置：布局、超边轮廓、节点、标签。每项标明改动后是重新布局还是只重绘
-const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, onResetColors }) => {
-    const { t } = useI18n();
+const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, onResetColors, onExportModelReadable }) => {
+    const [exporting, setExporting] = useState(false);
+    // 上次导出的尺寸与标签像素（对照分辨率预算：标签约 ≥ 12 px）/ last export: size and label pixels
+    const [exported, setExported] = useState(null);
+    const mr = settings.modelReadable;
+    const { t, lang } = useI18n();
     const set = (key) => (value) => setSettings((s) => ({ ...s, [key]: value }));
     const isHyper = mode === "hyper";
     const isMatrix = mode === "matrix";
@@ -93,6 +97,64 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                     <div className="text-[11px] text-gray-400">{t("matrixHint")}</div>
                 </Group>
             )}
+
+            <Group title={t("groupModelReadable")}>
+                <Row label={t("modelReadable")} relayout>
+                    <span title={t("modelReadableHint")}>
+                        <Switch checked={mr} onChange={set("modelReadable")} />
+                    </span>
+                </Row>
+                <Row label={t("mrVertexLabel")} relayout disabled={!mr}>
+                    <Segmented
+                        value={settings.mrVertexLabel}
+                        onChange={set("mrVertexLabel")}
+                        options={[["code+name", t("mrCodeName")], ["code", t("mrCode")]]}
+                    />
+                </Row>
+                <Row label={t("mrFillOpacity")} relayout disabled={!mr || !isHyper}>
+                    <span title={t("mrFillOpacityHint")} className="flex items-center">
+                        <Slider
+                            value={settings.mrFillOpacity ?? 0}
+                            min={0}
+                            max={0.4}
+                            step={0.02}
+                            onChange={set("mrFillOpacity")}
+                            format={(v) => v.toFixed(2)}
+                        />
+                    </span>
+                </Row>
+                {mr && <div className="text-[11px] text-gray-400">{t("modelReadableHint")}</div>}
+                {onExportModelReadable && (
+                    <Row label={t(mr ? "mrExport" : "exportPng")}>
+                        {[["canvas", t("exportCanvas")], ["matrix", t("exportMatrix")], ["dual", t("exportDual")]].map(([target, label]) => {
+                            // 画布、双视图要用画布视图，矩阵模式下没有 / canvas and dual need the canvas view, absent in matrix mode
+                            const needsCanvas = target !== "matrix" && isMatrix;
+                            return (
+                                <button
+                                    key={target}
+                                    className="px-2 py-0.5 text-[11px] rounded border border-gray-300 hover:bg-gray-50 disabled:opacity-40"
+                                    disabled={needsCanvas || exporting}
+                                    title={needsCanvas ? t("mrExportMatrixHint") : t(`export_${target}Hint`)}
+                                    onClick={() => {
+                                        setExporting(true);
+                                        Promise.resolve(onExportModelReadable(lang, target))
+                                            .then((image) => image && setExported(image))
+                                            .catch((e) => console.error(e))
+                                            .finally(() => setExporting(false));
+                                    }}
+                                >
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </Row>
+                )}
+                {exported && (
+                    <div className={`text-[11px] ${exported.labelPx < 12 ? "text-amber-600" : "text-gray-400"}`}>
+                        {t("exportedInfo", { w: exported.width, h: exported.height, px: exported.labelPx })}
+                    </div>
+                )}
+            </Group>
 
             <Group title={t("groupLayout")}>
                 <Row label={t("layoutAlgorithm")} relayout disabled={isMatrix}>
@@ -166,7 +228,7 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                         options={[["hyperedge", t("byHyperedge")], ["type", t("byHyperedgeType")]]}
                     />
                 </Row>
-                <Row label={t("fillOpacity")} disabled={!isHyper || !settings.contours}>
+                <Row label={t("fillOpacity")} disabled={!isHyper || !settings.contours || mr}>
                     <Slider
                         value={settings.fillOpacity}
                         min={0}

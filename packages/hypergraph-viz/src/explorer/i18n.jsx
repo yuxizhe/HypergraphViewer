@@ -57,6 +57,9 @@ export const MESSAGES = {
         autoHideDegree: "Auto-hide degree >", autoHideDegreeHint: "When a subgraph opens, hide vertices in more of its hyperedges than this (the center included); 0 = off",
         groupLabel: "Labels", labelMode: "Show", labelAll: "All", labelKey: "Center & hubs", labelNone: "None",
         labelFontSize: "Font size", labelBy: "Style", labelUniform: "Uniform", labelByDegree: "By degree", labelOverlap: "Overlap", labelOverlapHide: "Hide", labelOverlapLayout: "Avoid in layout", labelOverlapAllow: "Allow", labelMaxLength: "Max length", labelMaxLengthHint: "Truncate longer labels (characters); 0 = no limit. Long labels stretch hyperedges when label overlap is prevented", resetSettings: "Reset settings", resetColors: "Reset colors",
+        groupModelReadable: "Model-readable", modelReadable: "MR mode", modelReadableHint: "For multimodal models: vertices and hyperedges carry short codes (v1, e1), contours are outlines only, labels are never hidden, faded hubs go to the legend; codes match the exported mapping table",
+        mrVertexLabel: "Vertex label", mrCodeName: "Code + name", mrCode: "Code only", mrExport: "Export PNG + table", exportPng: "Export PNG", mrExportMatrixHint: "Switch to hypergraph or graph mode to export the canvas", mrLegend: "Legend", mrFillOpacity: "Contour fill", mrFillOpacityHint: "0 = outlines only (blended fills where contours overlap can't be traced back to a hyperedge)",
+        exportCanvas: "Canvas", exportMatrix: "Matrix", exportDual: "Dual", export_canvasHint: "The canvas as drawn, with the legend below", export_matrixHint: "The incidence matrix, columns labeled above and below", export_dualHint: "Canvas and incidence matrix side by side, same colors and codes", exportedInfo: "Exported {w}×{h}; labels ≈ {px} px (aim for ≥ 12)",
     },
     zh: {
         databaseInfo: "数据库信息",
@@ -111,6 +114,9 @@ export const MESSAGES = {
         autoHideDegree: "自动隐藏度数 >", autoHideDegreeHint: "打开子图时，隐藏在子图中所在超边数超过该值的实体（含中心）；0 表示不隐藏",
         groupLabel: "标签", labelMode: "显示", labelAll: "全部", labelKey: "中心与枢纽", labelNone: "不显示",
         labelFontSize: "字号", labelBy: "样式", labelUniform: "统一", labelByDegree: "按度数", labelOverlap: "重叠时", labelOverlapHide: "隐藏", labelOverlapLayout: "布局避让", labelOverlapAllow: "允许重叠", labelMaxLength: "最大长度", labelMaxLengthHint: "标签超过该字符数时截断，0 表示不限。防止标签重叠时，过长的标签会把超边拉长", resetSettings: "恢复默认设置", resetColors: "恢复默认颜色",
+        groupModelReadable: "模型可读", modelReadable: "MR 模式", modelReadableHint: "给多模态模型看：实体、超边带短编号（v1、e1），轮廓只描边，标签不隐藏，淡出的枢纽写进图例；编号与导出的映射表一致",
+        mrVertexLabel: "实体标签", mrCodeName: "编号 + 简称", mrCode: "只用编号", mrExport: "导出 PNG + 映射表", exportPng: "导出 PNG", mrExportMatrixHint: "切换到超图或图模式后才能导出画布", mrLegend: "图例", mrFillOpacity: "轮廓填充", mrFillOpacityHint: "0 为只描边（轮廓重叠处半透明填充会叠色，颜色对不回超边）",
+        exportCanvas: "画布", exportMatrix: "矩阵", exportDual: "双视图", export_canvasHint: "当前画布，图例在下方", export_matrixHint: "关联矩阵，列标签上下各一遍", export_dualHint: "画布与关联矩阵并排，颜色、编号一致", exportedInfo: "已导出 {w}×{h}，标签约 {px} px（建议 ≥ 12）",
     },
 };
 // eslint-disable-next-line react-refresh/only-export-components
