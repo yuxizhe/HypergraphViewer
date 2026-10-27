@@ -1,6 +1,6 @@
 import type { EdgeData, GraphOptions, ID, NodeData } from '@antv/g6';
 import { HOVER_BUBBLE_SETS } from './hover-bubble-sets';
-import { HYPERGRAPH_LAYOUT, POLYGON_LAYOUT, SHUFFLE_LAYOUT } from './register';
+import { HYPERGRAPH_LAYOUT, KELP_LAYOUT, POLYGON_LAYOUT, SHUFFLE_LAYOUT } from './register';
 import { seededRandom } from './shuffle-layout';
 import type { HypergraphTheme } from './theme';
 import { resolveTheme, typeColorsOf } from './theme';
@@ -34,14 +34,17 @@ export type HypergraphMode = 'hyper' | 'graph';
 
 /**
  * <zh/> 布局设置。超图模式默认 'hypergraph'；'polygon' 为多边形画法（HGPolyVis）：超图布局 + 多边形优化，超边画成成员在角上的多边形；
- * 'force' 为改造前的力导 + 主超边聚类；图模式下 'hypergraph'、'polygon' 按 'force' 处理
+ * 'kelp' 为 KelpFusion 画法（见 kelp.ts，移植自 4.3c 原型）：坐标同超图布局，超边在成员挨得近的地方填成区域、离得远的地方只画一条线，
+ * 多条超边共用的一段平行错开；'force' 为改造前的力导 + 主超边聚类；图模式下 'hypergraph'、'polygon'、'kelp' 按 'force' 处理
  *
  * <en/> Layout settings. Hyper mode defaults to 'hypergraph'; 'polygon' is the polygon drawing (HGPolyVis): the hypergraph layout
  * plus polygon optimization, with each hyperedge drawn as a polygon whose corners are its members; 'force' is the former force
- * layout clustered by primary hyperedge; in graph mode 'hypergraph' and 'polygon' fall back to 'force'
+ * layout clustered by primary hyperedge; 'kelp' is the KelpFusion drawing on the hypergraph layout's coordinates (filled where
+ * members are close, a line where they are far, shared stretches side by side); in graph mode 'hypergraph', 'polygon' and
+ * 'kelp' fall back to 'force'
  */
 export interface LayoutSettings {
-  type?: 'hypergraph' | 'polygon' | 'force' | 'force-atlas2' | 'circular';
+  type?: 'hypergraph' | 'polygon' | 'kelp' | 'force' | 'force-atlas2' | 'circular';
   /** 节点间距（超图布局、多边形布局），默认 50 / node spacing of the hypergraph and polygon layouts, defaults to 50 */
   nodeSpacing?: number;
   /** 标签防重叠（超图布局），默认开 / prevent label overlap in the hypergraph layout, on by default */
@@ -228,6 +231,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   const isGraph = mode === 'graph';
   // 多边形画法：超边画成成员在角上的多边形 / polygon drawing: hyperedges as polygons with members at the corners
   const polygon = !isGraph && layoutSettings.type === POLYGON_LAYOUT;
+  const kelp = !isGraph && layoutSettings.type === KELP_LAYOUT;
 
   const fadedSet = new Set((options.fadedNodes || []).filter((id) => id in graph.vertices));
   const allNodes: NodeData[] = Object.entries(graph.vertices).map(([id, value]) => ({ ...value, id, label: id }));
@@ -340,12 +344,15 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       ...theme.bubble.normal,
       // 大的多边形在下、小的在上 / larger polygons below smaller ones
       ...(polygon && { polygon: true, zIndex: -1 - members.length / 1000, lineJoin: 'round', ...theme.polygonStroke.normal }),
+      // 始终写出 kelp：G6 更新插件时合并新旧配置，切回 bubble 时只去掉这个键不会生效 / always set: plugin updates merge options
+      ...(!isGraph && { kelp }),
+      ...(kelp && { lineJoin: 'round', lineCap: 'round', ...theme.kelpStroke.normal }),
       ...(lineDash && { lineDash }),
     });
     layoutHyperedges.push({ id, weight: he.weight || members.length, members });
   });
 
-  if (contourNesting && !polygon) {
+  if (contourNesting && !polygon && !kelp) {
     // 每个节点的轮廓按成员数排序（同样大小按出现顺序），第 k 层外扩 k 个步长
     // Each node's contours by size (ties in order of appearance); level k grows by k steps
     const contoursOf = new Map<ID, typeof plugins>();
@@ -453,10 +460,10 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     layout = { type: 'circular', ...sizeOption };
   } else if (layoutType === 'force-atlas2') {
     layout = { type: 'force-atlas2', preventOverlap: true, kr: 50, ...sizeOption };
-  } else if (!isGraph && (layoutType === HYPERGRAPH_LAYOUT || layoutType === POLYGON_LAYOUT)) {
-    // 超图布局，连线也作为 2 元超边参与，以中心实体为中心呈花瓣状排布；多边形布局在此基础上再做多边形优化
+  } else if (!isGraph && (layoutType === HYPERGRAPH_LAYOUT || layoutType === POLYGON_LAYOUT || layoutType === KELP_LAYOUT)) {
+    // 超图布局，连线也作为 2 元超边参与，以中心实体为中心呈花瓣状排布；多边形布局在此基础上再做多边形优化；KelpFusion 只换画法
     layout = {
-      type: layoutType,
+      type: layoutType === KELP_LAYOUT ? HYPERGRAPH_LAYOUT : layoutType,
       hyperedges: layoutHyperedges,
       centerNode: layoutCenter,
       nodeSpacing: layoutSettings.nodeSpacing ?? 50,
