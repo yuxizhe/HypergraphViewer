@@ -14,57 +14,13 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ID } from '@antv/g6';
 import type { Browser, LaunchOptions, Page } from 'playwright';
-import { filterHypergraph, overlapHubs } from './analysis';
-import type { MatrixOrder } from './matrix';
-import type { ModelReadableKey, ModelReadableOptions } from './model-readable';
+import type { ModelReadableKey } from './model-readable';
 import { modelReadableKey, modelReadableTable } from './model-readable';
-import type { HypergraphData } from './spec';
+import type { RenderJob, SVGRenderResult } from './render-job';
+import { prepareJob, renderJobSVG } from './render-job';
 
-/**
- * <zh/> 一张图：数据与画法。layout：'canvas' 画布（超图 / 图模式），'matrix' 关联矩阵（V-mat），'dual' 画布与矩阵并排（V-dual）
- *
- * <en/> One image: data and drawing. layout: the canvas, the incidence matrix (V-mat) or both side by side (V-dual)
- */
-export interface RenderJob {
-  data: HypergraphData;
-  centerNode?: ID;
-  layout?: 'canvas' | 'matrix' | 'dual';
-  /** 'hyper' 超图（默认），'graph' 图模式 / hypergraph (default) or graph mode */
-  mode?: 'hyper' | 'graph';
-  /** 图模式下 3 元及以上超边的画法，默认 'star'（V-star）；'clique' 为团展开（V-clique）/ default 'star' */
-  graphEdges?: 'star' | 'clique' | 'binary';
-  /** 超图模式的布局：'hypergraph' 轮廓（V-set，默认），'polygon' 多边形（V-poly）/ contours (default) or polygons */
-  layoutType?: 'hypergraph' | 'polygon';
-  nodeSpacing?: number;
-  /** 打乱布局的种子：成员关系不变、位置按种子随机（见 LayoutSettings.shuffleSeed）/ shuffle positions by seed */
-  shuffleSeed?: number;
-  /** 超边 id → 颜色，覆盖默认的按顺序取色（如按公司着色）/ hyperedge id → color, over the default cycling */
-  hyperedgeColors?: Record<ID, string>;
-  /** 实体类型 → 颜色 / vertex type → color */
-  typeColors?: Record<string, string>;
-  /** 单个实体的颜色，优先于类型颜色 / per-vertex colors */
-  nodeColors?: Record<ID, string>;
-  /**
-   * 淡出的实体（不画，写进图例）：'overlap' 按注定重叠挑出隐含枢纽（默认，与超图浏览器一致），'none' 不淡出，或直接给出 id
-   * Faded vertices: implicit hubs by forced overlaps (default, as in the explorer), none, or explicit ids
-   */
-  fade?: 'overlap' | 'none' | ID[];
-  /** 彻底去掉的实体类型（如金融数据的“财季”），先于挑枢纽去掉，与超图浏览器的 hiddenTypes 相同 / vertex types removed entirely */
-  hideTypes?: string[];
-  /** 模型可读模式，默认开 / model-readable mode, on by default */
-  modelReadable?: boolean | ModelReadableOptions;
-  /** 标签去掉最后一个冒号及之前的部分，默认开（与超图浏览器一致）/ strip the type prefix from labels, on by default */
-  stripPrefix?: boolean;
-  matrixOrder?: MatrixOrder;
-  typeField?: string;
-  nodeSizeBy?: 'fixed' | 'degree';
-  /** 图片宽度，默认 'dual' 1536、其余 1024 / image width, 1536 for 'dual' and 1024 otherwise */
-  width?: number;
-  maxHeight?: number;
-  padding?: number;
-  /** 图例与映射表的语言，默认 'en' / language of the legend and table */
-  locale?: 'en' | 'zh';
-}
+export type { RenderJob, SVGRenderResult } from './render-job';
+export { prepareJob, renderJobSVG } from './render-job';
 
 export interface RenderResult {
   png: Buffer;
@@ -202,14 +158,10 @@ export const createHeadlessRenderer = async (options: HeadlessRendererOptions = 
 
   const render = async (job: RenderJob): Promise<RenderResult> => {
     const start = Date.now();
-    const { centerNode, layout = 'canvas', fade = 'overlap', modelReadable = true, typeField = 'entity_type', locale = 'en' } = job;
-    const types = new Set(job.hideTypes || []);
-    const typed = Object.keys(job.data.vertices).filter((id) => types.has(job.data.vertices[id]?.[typeField]));
-    const data = typed.length ? filterHypergraph(job.data, { nodes: typed }) : job.data;
-    const fadedNodes =
-      fade === 'none' ? [] : fade === 'overlap' ? overlapHubs(data).hubs : fade.filter((id) => id in data.vertices);
+    const { centerNode, locale = 'en' } = job;
+    const { data, fadedNodes, layout, modelReadable, typeField, width } = prepareJob(job);
     errors.length = 0;
-    const arg = { job: { ...job, data }, fadedNodes, layout, modelReadable, width: job.width ?? (layout === 'dual' ? 1536 : 1024) };
+    const arg = { job: { ...job, data }, fadedNodes, layout, modelReadable, width };
     const image: any = await page.evaluate(`(${PAGE_RENDER})(${JSON.stringify(arg)})`);
     if (errors.length) throw new Error(`[hypergraph-viz] page error: ${errors.join('; ')}`);
     const key = modelReadable ? modelReadableKey(data, { centerNode }) : null;
@@ -247,4 +199,43 @@ export const renderHypergraphImage = async (job: RenderJob, options?: HeadlessRe
   } finally {
     await renderer.close();
   }
+};
+
+export interface SVGRendererOptions {
+  /**
+   * 另外注册的字体文件（转 PNG 用，如 Linux 上没装 CJK 字体时）；系统字体总会读取
+   * Extra font files for PNG output (e.g. CJK fonts on Linux); system fonts are always available
+   */
+  fontFiles?: string[];
+  /** 是否转 PNG，默认 true；false 时只给 SVG（png 为空 Buffer）/ rasterize to PNG, true by default */
+  png?: boolean;
+}
+
+/**
+ * <zh/> 创建 SVG 渲染器：不需要浏览器，接口与 createHeadlessRenderer 相同（render 另返回 svg 与几何）。
+ * SVG 由 renderJobSVG 生成；PNG 用 @napi-rs/canvas（Skia，预编译，需另装）把 SVG 画到画布上再编码。
+ * 不用 resvg：它每张图都重新解析整个字体文件，中文字体动辄 20–50 MB，一张要 2–5 秒；Skia 的字体在进程内只加载一次。
+ * 画法与浏览器版的差异见 svg-render.ts
+ *
+ * <en/> SVG renderer without a browser, with the same interface as createHeadlessRenderer (render also returns the SVG and
+ * geometry). PNGs come from @napi-rs/canvas (Skia, prebuilt; install separately), which loads fonts once per process,
+ * unlike resvg-js that reparses whole CJK font files for every image. See svg-render.ts for differences from the browser
+ */
+export const createSVGRenderer = async (options: SVGRendererOptions = {}) => {
+  const { png = true } = options;
+  const skia = png ? await import('@napi-rs/canvas') : null;
+  options.fontFiles?.forEach((file) => skia?.GlobalFonts.registerFromPath(file));
+  const render = async (job: RenderJob): Promise<RenderResult & SVGRenderResult> => {
+    const start = Date.now();
+    const result = await renderJobSVG(job);
+    let image: Buffer = Buffer.alloc(0);
+    if (skia) {
+      const svg = await skia.loadImage(Buffer.from(result.svg));
+      const canvas = skia.createCanvas(result.width, result.height);
+      canvas.getContext('2d').drawImage(svg, 0, 0, result.width, result.height);
+      image = await canvas.encode('png');
+    }
+    return { ...result, png: image, ms: Date.now() - start };
+  };
+  return { render, close: async () => undefined };
 };

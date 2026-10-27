@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// 批量把超图渲染成给模型看的图片（无头浏览器），每张图输出 PNG + 编号映射表（Markdown），并写一份 manifest.jsonl。
-// 需要先构建（npm run build）并安装 playwright。用法：
+// 批量把超图渲染成给模型看的图片，每张图输出 PNG + 编号映射表（Markdown），并写一份 manifest.jsonl。
+// 渲染器：--renderer browser（默认，无头浏览器里的 G6 画布，需安装 playwright）
+// 或 --renderer svg（纯 SVG + Skia 转 PNG，需安装 @napi-rs/canvas，不需要浏览器；--svg 另存 .svg）。需要先构建（npm run build）。用法：
 //   node scripts/render-mr.mjs --hif ../../public/datasets/nvda.hif.json --top 3 --layout canvas,matrix,dual --out out/
 //   node scripts/render-mr.mjs --hif nvda.hif.json --center 范围:NVDA:超大规模云 --hide-types 财季 --layout dual --locale zh
 //   node scripts/render-mr.mjs --data graph.json --center 公司:英伟达 --layout dual --locale zh
@@ -9,7 +10,7 @@ import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { fromHIF, fromKeyedEdges } from '../dist/index.js';
-import { createHeadlessRenderer } from '../dist/node.js';
+import { createHeadlessRenderer, createSVGRenderer } from '../dist/node.js';
 
 const { values } = parseArgs({
   options: {
@@ -21,6 +22,7 @@ const { values } = parseArgs({
     mode: { type: 'string', default: 'hyper' },
     'graph-edges': { type: 'string', default: 'star' },
     polygon: { type: 'boolean', default: false },
+    kelp: { type: 'boolean', default: false },
     'shuffle-seed': { type: 'string' },
     fade: { type: 'string', default: 'overlap' },
     'hide-types': { type: 'string' },
@@ -31,6 +33,8 @@ const { values } = parseArgs({
     width: { type: 'string' },
     locale: { type: 'string', default: 'en' },
     out: { type: 'string', default: 'out' },
+    renderer: { type: 'string', default: 'browser' },
+    svg: { type: 'boolean', default: false },
   },
 });
 
@@ -65,7 +69,7 @@ const safe = (s) => String(s).replace(/[\\/:*?"<>|\s]+/g, '_');
 mkdirSync(values.out, { recursive: true });
 const manifest = join(values.out, 'manifest.jsonl');
 
-const renderer = await createHeadlessRenderer();
+const renderer = values.renderer === 'svg' ? await createSVGRenderer() : await createHeadlessRenderer();
 try {
   for (const [name, data, centerNode] of graphs) {
     for (const layout of layouts) {
@@ -75,7 +79,7 @@ try {
         layout,
         mode: values.mode,
         graphEdges: values['graph-edges'],
-        layoutType: values.polygon ? 'polygon' : 'hypergraph',
+        layoutType: values.polygon ? 'polygon' : values.kelp ? 'kelp' : 'hypergraph',
         shuffleSeed: values['shuffle-seed'] === undefined ? undefined : Number(values['shuffle-seed']),
         fade,
         hideTypes: values['hide-types']?.split(','),
@@ -88,6 +92,7 @@ try {
       const base = join(values.out, `${safe(name)}.${layout}${seed}`);
       writeFileSync(`${base}.png`, result.png);
       if (result.table) writeFileSync(`${base}.md`, result.table);
+      if (values.svg && result.svg) writeFileSync(`${base}.svg`, result.svg);
       const row = {
         name,
         layout,
@@ -99,6 +104,7 @@ try {
         vertices: result.key?.vertices.size ?? Object.keys(data.vertices).length,
         hyperedges: result.key?.hyperedges.size ?? data.hyperedges.length,
         faded: result.fadedNodes,
+        renderer: values.renderer,
         ms: result.ms,
       };
       appendFileSync(manifest, `${JSON.stringify(row)}\n`);

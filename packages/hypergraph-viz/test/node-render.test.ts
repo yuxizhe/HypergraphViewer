@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { datas } from './fixtures/neurology-data.js';
 import { fromKeyedEdges } from '../src';
 import type { HeadlessRenderer } from '../src/node';
-import { createHeadlessRenderer } from '../src/node';
+import { createHeadlessRenderer, createSVGRenderer } from '../src/node';
 
 const built = existsSync(join(__dirname, '..', 'dist', 'hypergraph-viz.global.js'));
 const center = Object.keys(datas.graphs)[0];
@@ -68,4 +68,25 @@ describe.skipIf(!built)('headless rendering', () => {
     expect(result.key!.vertices.has(typed)).toBe(false);
     expect(result.legend[0]).toContain('(not drawn)');
   }, 60_000);
+});
+
+describe('SVG renderer (no browser)', () => {
+  it.each(['canvas', 'matrix', 'dual'] as const)('renders %s as a PNG and an SVG', async (layout) => {
+    const renderer = await createSVGRenderer();
+    const result = await renderer.render({ data, centerNode: center, layout });
+    expect(isPng(result.png)).toBe(true);
+    expect(result.svg.startsWith('<svg')).toBe(true);
+    expect(result.width).toBe(layout === 'dual' ? 1536 : 1024);
+    // PNG 尺寸与 SVG 相同 / PNG matches the SVG size
+    expect(result.png.readUInt32BE(16)).toBe(result.width);
+    expect(result.png.readUInt32BE(20)).toBe(result.height);
+    expect(result.table).toContain('| e1 |');
+  }, 60_000);
+
+  it('can skip the PNG', async () => {
+    const renderer = await createSVGRenderer({ png: false });
+    const result = await renderer.render({ data, centerNode: center });
+    expect(result.png.length).toBe(0);
+    expect(result.geometry?.nodes.length).toBeGreaterThan(0);
+  });
 });

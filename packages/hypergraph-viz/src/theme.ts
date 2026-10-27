@@ -35,6 +35,8 @@ export interface HypergraphTheme {
   bubble: { normal: BubbleState; highlight: BubbleState; dimmed: BubbleState };
   /** 多边形画法（layout.type: 'polygon'）在 bubble 各档之上的描边：边要看得清，才分得开叠在一起的多边形 / polygon outlines over the bubble levels */
   polygonStroke: Record<'normal' | 'highlight' | 'dimmed', Pick<BubbleState, 'strokeOpacity' | 'lineWidth'>>;
+  /** KelpFusion 画法（layout.type: 'kelp'）连线的描边，在 bubble 各档之上 / line strokes of the KelpFusion drawing over the bubble levels */
+  kelpStroke: Record<'normal' | 'highlight' | 'dimmed', Pick<BubbleState, 'strokeOpacity' | 'lineWidth'>>;
   /** bubble-sets 的路由与轮廓参数，默认贴紧节点（nodeR0 1 / nodeR1 5）/ bubble-sets routing and contour options */
   bubbleOptions: Record<string, unknown>;
   /** 嵌套轮廓（contourNesting）中节点每被包一层，轮廓外扩的距离 / how far a contour grows per nesting level with contourNesting */
@@ -92,6 +94,12 @@ export const DEFAULT_THEME: HypergraphTheme = {
     highlight: { strokeOpacity: 1, lineWidth: 3 },
     dimmed: { strokeOpacity: 0.08, lineWidth: 1 },
   },
+  // 与 4.3c 原型相同：线宽 4、不透明度 0.75 / as in the 4.3c prototype
+  kelpStroke: {
+    normal: { strokeOpacity: 0.75, lineWidth: 4 },
+    highlight: { strokeOpacity: 1, lineWidth: 5 },
+    dimmed: { strokeOpacity: 0.08, lineWidth: 2 },
+  },
   bubbleOptions: {
     maxRoutingIterations: 100,
     maxMarchingIterations: 20,
@@ -117,6 +125,7 @@ export const resolveTheme = (theme?: Partial<HypergraphTheme>): HypergraphTheme 
   ...theme,
   bubble: { ...DEFAULT_THEME.bubble, ...theme?.bubble },
   polygonStroke: { ...DEFAULT_THEME.polygonStroke, ...theme?.polygonStroke },
+  kelpStroke: { ...DEFAULT_THEME.kelpStroke, ...theme?.kelpStroke },
   bubbleOptions: { ...DEFAULT_THEME.bubbleOptions, ...theme?.bubbleOptions },
 });
 
