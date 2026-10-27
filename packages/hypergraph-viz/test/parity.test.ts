@@ -31,7 +31,8 @@ describe.each(centers)('vertex %s', (center) => {
     const legacy = processGraphData(graph, center, mode, typeColors);
     const spec = toG6Spec(fromKeyedEdges(graph), { mode, centerNode: center, typeColors });
 
-    expect(spec.data.nodes).toEqual(legacy.data.nodes);
+    // 力导布局的初始位置（按种子，见 LayoutSettings.seed）是新增的，对照时去掉 / seeded initial positions are new
+    expect(spec.data.nodes!.map(({ style: _, ...n }) => n)).toEqual(legacy.data.nodes);
     const lines = (edges: any[]) =>
       edges.map(({ id: _, source, target, ...rest }) => ({ pair: pair(source, target), ...rest }));
     expect(lines(spec.data.edges!)).toEqual(lines(legacy.data.edges));

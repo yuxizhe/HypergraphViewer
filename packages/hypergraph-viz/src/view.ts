@@ -1,15 +1,35 @@
 import type { GraphOptions, ID } from '@antv/g6';
-import { Graph, GraphEvent } from '@antv/g6';
+import { Graph, GraphEvent, Label } from '@antv/g6';
 import { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, SUPPRESS_CONTOUR_UPDATE } from './hover-bubble-sets';
 import { cullLabels } from './label-culling';
 import { registerHypergraph } from './register';
 import type { Selection } from './selection';
 import { EMPTY_SELECTION, isEmptySelection, nextSelection, selectionStyles } from './selection';
 import type { HyperedgeItem, HypergraphData, HypergraphSpec, SpecOptions } from './spec';
-import { pairId, toG6Spec } from './spec';
+import { pairId, themeOf, toG6Spec } from './spec';
+import type { ModelReadableKey } from './model-readable';
+import { modelReadableLegend, placeTags, tagSize } from './model-readable';
+import type { ExportedImage, ExportImageOptions, ImagePanel } from './export-image';
+import { composeImage, svgDataURL } from './export-image';
+import type { MatrixOrder } from './matrix';
+import { incidenceMatrixSVG } from './matrix-svg';
+
+export type { ExportedImage, ExportImageOptions } from './export-image';
+
+/**
+ * <zh/> 画布导出的内容：'canvas' 只有画布；'dual' 画布与关联矩阵并排（V-dual），矩阵的颜色、编号与画布一致
+ *
+ * <en/> What to export: the canvas only, or the canvas beside the incidence matrix ('dual', V-dual) with matching colors and codes
+ */
+export interface ViewExportOptions extends ExportImageOptions {
+  layout?: 'canvas' | 'dual';
+  /** 'dual' 时矩阵的行列排序，默认 'degree' / matrix order for 'dual' */
+  matrixOrder?: MatrixOrder;
+}
 import { placeFaded } from './faded';
 import type { HypergraphTheme } from './theme';
 import { resolveTheme } from './theme';
+import { charWidth } from './layout';
 
 /**
  * <zh/> 悬停 / 点击命中的元素。连线是 2 元超边（或图模式下拆出的一对成员），轮廓是 3 元及以上的超边；
@@ -73,6 +93,16 @@ export interface HypergraphView {
   hover(target: Partial<Selection> | null): void;
   /** 缩放平移到撑满画布（不超过 maxFitZoom），如工具栏的“适应画布” / fit the graph to the canvas, capped at maxFitZoom */
   fitView(animate?: boolean): Promise<void>;
+  /**
+   * 把整张图导出为 PNG（白底、按宽度缩放）；MR 模式下在图片下方画出图例（淡出的枢纽、未画出的超边）
+   * Export the whole graph as a PNG (white background, scaled to the width); in MR mode the legend is drawn below
+   */
+  exportImage(options?: ViewExportOptions): Promise<ExportedImage>;
+  /**
+   * 等到排队中、进行中的渲染（布局、轮廓、淡出实体、编号标签）全部完成；用于无头渲染后再导出
+   * Resolve once queued and in-flight renders (layout, contours, faded vertices, code tags) are done, e.g. before a headless export
+   */
+  rendered(): Promise<void>;
   destroy(): void;
 }
 
@@ -87,6 +117,7 @@ const LAYOUT_KEYS = [
   'nodeSizeBy',
   'labelBy',
   'fadedNodes',
+  'modelReadable',
 ] as const;
 const STYLE_KEYS = [
   'typeField',
@@ -218,7 +249,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
 
   // 按选择与悬停给轮廓插件配置透明度档位
   const decoratePlugins = (plugins: any[], bubbles: Record<ID, string>) => {
-    const { bubble, polygonStroke } = resolveTheme(options.theme);
+    const { bubble, polygonStroke } = themeOf(options);
     return plugins.map((p: any) => {
       if (p.type !== HOVER_BUBBLE_SETS) return p;
       const level = bubbles[p.hyperedge?.id] ?? 'normal';
@@ -260,6 +291,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
       () => undefined,
     );
     graph.setPlugins((plugins) => decoratePlugins(plugins, bubbles));
+    styleTags(bubbles);
   };
 
   const setSelected = (next: typeof selected) => {
@@ -336,7 +368,10 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   });
 
   // 拖动节点后重新避让
-  graph.on('node:dragend', () => updateCulledLabels());
+  graph.on('node:dragend', () => {
+    updateCulledLabels();
+    drawTags();
+  });
 
   // 标签固定屏幕字号：每次缩放、重绘后把节点标签图形按 1 / 缩放 反向缩放（重绘会新建或重置标签图形）。
   // 不用 G6 的 fix-element-size：它只在滚轮缩放事件里更新缩放倍数，换数据后自动撑满改变了缩放，它仍按旧倍数修正
@@ -344,7 +379,8 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     if (!options.fixLabelSize || graph.destroyed) return;
     const element = (graph as any).context.element;
     if (!element) return;
-    const scale = 1 / (graph.getZoom() || 1);
+    // MR 模式：标签随画布缩放，导出的图片与画面一致 / MR mode: labels scale with the canvas so exports match the screen
+    const scale = options.modelReadable ? 1 : 1 / (graph.getZoom() || 1);
     graph.getNodeData().forEach((d) => {
       const label = element.getElement(d.id)?.getShape?.('label');
       if (label && label.getLocalScale()[0] !== scale) label.setLocalScale(scale);
@@ -355,7 +391,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
   graph.on(GraphEvent.AFTER_RENDER, fixLabelScale);
   // 标签固定屏幕字号时，缩放停下来后按新的缩放重新避让
   graph.on(GraphEvent.AFTER_TRANSFORM, () => {
-    if (!options.fixLabelSize || !options.hideOverlappingLabels) return;
+    if (!options.fixLabelSize || !options.hideOverlappingLabels || options.modelReadable) return;
     clearTimeout(recullTimer);
     recullTimer = setTimeout(() => {
       if (!graph.destroyed && Math.abs(graph.getZoom() / culledZoom - 1) > 0.05) updateCulledLabels();
@@ -450,7 +486,8 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     if (graph.destroyed || !spec || renderPending) return;
     const prev = culled;
     culled = new Set();
-    if (options.hideOverlappingLabels) {
+    // MR 模式下标签不隐藏 / labels are never hidden in MR mode
+    if (options.hideOverlappingLabels && !options.modelReadable) {
       const style = spec.node.style as any;
       const value = (v: any, d: any) => (typeof v === 'function' ? v(d) : v);
       const degree = new Map<ID, number>();
@@ -497,8 +534,90 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     return next;
   };
 
+  // MR 模式：超边编号标签（3 元及以上的超边），画在主图层上，随画布缩放，也进入导出的图片
+  let tags: { id: ID; shape: any }[] = [];
+  const clearTags = () => {
+    tags.forEach(({ shape }) => shape.destroy());
+    tags = [];
+  };
+  const styleTags = (bubbles?: Record<ID, string>) => {
+    if (!tags.length) return;
+    const levels = bubbles ?? (spec ? selectionStyles(spec, selection, hovered).bubbles : {});
+    tags.forEach(({ id, shape }) => {
+      shape.style.opacity = levels[id] === 'dimmed' ? 0.25 : 1;
+    });
+  };
+  const drawTags = () => {
+    clearTags();
+    const mr = spec?.modelReadable;
+    if (graph.destroyed || !spec || !mr || !mr.tags.length || options.contours === false) return;
+    const style = spec.node.style as any;
+    const value = (v: any, d: any) => (typeof v === 'function' ? v(d) : v);
+    const fontSize = themeOf(options).labelFontSize;
+    const drawn = new Set(graph.getNodeData().map((d) => d.id));
+    const pos = new Map<ID, [number, number]>();
+    // 障碍：节点与节点标签（标签在节点下方）
+    const obstacles = spec.data.nodes!.filter((d) => drawn.has(d.id)).flatMap((d) => {
+      const [x, y] = graph.getElementPosition(d.id);
+      pos.set(d.id, [x, y]);
+      const size = value(style.size, d);
+      const r = (Array.isArray(size) ? Math.max(...size) : size || 0) / 2;
+      const text = String(value(style.labelText, d) ?? '');
+      let w = 0;
+      for (const ch of text) w += fontSize * charWidth(ch);
+      return [
+        { x0: x - r, y0: y - r, x1: x + r, y1: y + r },
+        ...(text ? [{ x0: x - w / 2 - 2, y0: y + r, x1: x + w / 2 + 2, y1: y + r + fontSize * 1.3 }] : []),
+      ];
+    });
+    const placed = placeTags(
+      mr.tags.map(({ id, code, members }) => {
+        const own = members.filter((m) => m !== options.centerNode && pos.has(m));
+        const pts = (own.length ? own : members.filter((m) => pos.has(m))).map((m) => pos.get(m)!);
+        const n = pts.length || 1;
+        return {
+          id,
+          text: code,
+          size: members.length,
+          anchor: { x: pts.reduce((a, p) => a + p[0], 0) / n, y: pts.reduce((a, p) => a + p[1], 0) / n },
+        };
+      }),
+      obstacles,
+      fontSize,
+    );
+    const canvas = (graph as any).context.canvas;
+    tags = mr.tags.map(({ id, code, color }) => {
+      const at = placed.get(id)!;
+      const { height } = tagSize(code, fontSize);
+      const shape = new Label({
+        style: {
+          x: at.x,
+          y: at.y + height / 2 - 1,
+          text: code,
+          fontSize,
+          fontWeight: 'bold',
+          fill: '#111827',
+          textAlign: 'center',
+          textBaseline: 'bottom',
+          background: true,
+          backgroundFill: '#fff',
+          backgroundStroke: color,
+          backgroundLineWidth: 2,
+          backgroundRadius: 3,
+          padding: [1, 4],
+          zIndex: 10,
+          pointerEvents: 'none',
+        } as any,
+      });
+      canvas.appendChild(shape);
+      return { id, shape };
+    });
+    styleTags();
+  };
+
   const render = () => {
     if (graph.destroyed || !options.data) return;
+    clearTags();
     hovered = null;
     pointerKey = '';
     // 单选模式：换数据时清掉上一份数据的选中（id 相同的元素在 setOptions 后会保留原状态）
@@ -535,6 +654,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
     withoutContourUpdate(() => graph.draw())
       .then(() => {
         updateCulledLabels();
+        drawTags();
         (next.plugins as any[]).forEach((p) => {
           if (p.type === HOVER_BUBBLE_SETS && (redrawContours || !prevKeys.has(p.key))) {
             (graph.getPluginInstance(p.key) as any)?.redraw();
@@ -613,6 +733,7 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
             await addFaded();
             if (seq !== renderSeq || disposed) return;
             updateCulledLabels();
+            drawTags();
           })
           .catch((e) => {
             if (seq === renderSeq && !graph.destroyed && !disposed) console.warn('[hypergraph-viz] render failed', e);
@@ -680,8 +801,55 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
         await graph.fitCenter(false);
       }
     },
+    async rendered() {
+      // render 在微任务中开始（scheduleRender），其间可能又排进新的一次
+      for (;;) {
+        await Promise.resolve();
+        if (renderPending) continue;
+        if (!inflight) return;
+        await inflight;
+      }
+    },
+    async exportImage({ layout = 'canvas', matrixOrder = 'degree', locale = 'en', ...size } = {}) {
+      if (graph.destroyed || !spec || !options.data) throw new Error('[hypergraph-viz] nothing to export');
+      const mr = spec.modelReadable;
+      const faded = spec.faded.nodes.map((d) => d.id);
+      const legend = mr ? modelReadableLegend(mr.key, { faded, locale }) : [];
+      const fontSize = themeOf(options).labelFontSize;
+      // 整张图（不受当前视口影响），像素 = 画布坐标 × devicePixelRatio
+      const url = await graph.toDataURL({ mode: 'overall', type: 'image/png' });
+      const dpr = globalThis.devicePixelRatio || 1;
+      const { width, height } = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.width / dpr, height: img.height / dpr });
+        img.onerror = reject;
+        img.src = url;
+      });
+      const panels: ImagePanel[] = [{ src: url, width, height, fontSize }];
+      if (layout === 'dual') {
+        const data = options.data;
+        const name = options.labelText;
+        const matrix = incidenceMatrixSVG(data, {
+          order: matrixOrder,
+          typeField: options.typeField,
+          centerNode: options.centerNode,
+          typeColors: options.typeColors,
+          nodeColors: options.nodeColors,
+          hyperedgeColors: options.hyperedgeColors,
+          hubNodes: faded,
+          labelText: name ? (id) => name({ ...data.vertices[id], id }) : undefined,
+          modelReadable: options.modelReadable,
+          fontSize,
+          theme: options.theme,
+        });
+        panels.push({ src: svgDataURL(matrix.svg), width: matrix.width, height: matrix.height, fontSize });
+      }
+      const image = await composeImage(panels, { ...size, legend });
+      return { ...image, legend, key: mr?.key ?? null };
+    },
     destroy() {
       disposed = true;
+      clearTags();
       clearTimeout(recullTimer);
       observer.disconnect();
       container.removeEventListener('pointerleave', onLeave);

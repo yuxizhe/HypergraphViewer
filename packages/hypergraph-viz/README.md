@@ -190,6 +190,23 @@ mountAdmin(document.getElementById('admin'), { api: createHttpAdminApi('/api/adm
 文件可直接从 CDN 引入（版本号写死），如 `https://unpkg.com/hypergraph-viz@0.2.1/dist/hypergraph-viz.explorer.global.js`
 与 `https://unpkg.com/hypergraph-viz@0.2.1/dist/style.css`。
 
+## 模型可读（MR）模式与导出图片
+
+给多模态模型看的画法：`modelReadable: true`（或 `{ vertexLabel: 'code' | 'code+name' }`）。开启后，实体和超边都带常显的短编号（v1、e1），轮廓只描边，标签不隐藏，淡出的枢纽写进图例。编号由 `modelReadableKey(data, { centerNode })` 生成，同一份数据每次结果相同。`modelReadableTable` 生成 Markdown 映射表，`incidenceMatrixSVG` 生成关联矩阵的 SVG 字符串。这三个函数都不依赖 DOM。
+
+在浏览器里导出图片：`view.exportImage({ layout: 'canvas' | 'dual', width, locale })` 导出画布，或画布与矩阵并排；`exportMatrixImage(data, options)` 只导出矩阵。返回 PNG（data URL）、图例，以及标签在图片中的像素 `labelPx`。
+
+Node 中用无头浏览器批量出图（需安装 `playwright`；它自带的浏览器没装时，改用系统 Chrome）：
+
+```ts
+import { createHeadlessRenderer } from 'hypergraph-viz/node';
+const renderer = await createHeadlessRenderer();
+const { png, table, labelPx } = await renderer.render({ data, centerNode, layout: 'dual', hideTypes: ['财季'], locale: 'zh' });
+await renderer.close();
+```
+
+命令行：`node scripts/render-mr.mjs --hif nvda.hif.json --top 3 --layout canvas,matrix,dual --out out/`。每张图输出 PNG 和 `.md` 映射表，并写一份 `manifest.jsonl`，记录尺寸、`labelPx` 和用时。中文标签依赖系统字体，Linux 上需要安装 CJK 字体。
+
 ## 只用其中一部分
 
 `registerHypergraph()` 注册 `'hypergraph'`、`'polygon'` 布局与 `'hover-bubble-sets'` 插件，`toG6Spec(data, options)` 生成 G6 的 data / node / edge / layout / plugins，可自行创建 Graph。

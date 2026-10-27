@@ -28,6 +28,7 @@ const InspectorPanel = ({
     settings,
     setSettings,
     onResetSettings,
+    onExportModelReadable,
     colors,
     selection,
     setSelection,
@@ -262,6 +263,8 @@ const InspectorPanel = ({
                                         nodeColors={matrix.nodeColors}
                                         hyperedgeColors={matrix.hyperedgeColors}
                                         hubNodes={matrix.hubNodes}
+                                        labelText={matrix.labelText}
+                                        columnLabel={matrix.columnLabel}
                                         rowHeaderWidth={96}
                                         minCellSize={9}
                                         columnHeaderHeight={10}
@@ -344,6 +347,7 @@ const InspectorPanel = ({
                                 hasCenter={centerNode !== undefined && centerNode !== ""}
                                 onResetSettings={onResetSettings}
                                 onResetColors={colors.reset}
+                                onExportModelReadable={onExportModelReadable}
                             />
                         </Section>
                     </>
