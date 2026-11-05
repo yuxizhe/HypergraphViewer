@@ -1,9 +1,12 @@
 import type { EdgeData, GraphOptions, ID, NodeData } from '@antv/g6';
 import { HOVER_BUBBLE_SETS } from './hover-bubble-sets';
-import { HYPERGRAPH_LAYOUT, POLYGON_LAYOUT } from './register';
+import { HYPERGRAPH_LAYOUT, POLYGON_LAYOUT, SHUFFLE_LAYOUT } from './register';
+import { seededRandom } from './shuffle-layout';
 import type { HypergraphTheme } from './theme';
 import { resolveTheme, typeColorsOf } from './theme';
 import { hyperedgeIdOf } from './analysis';
+import type { ModelReadableKey, ModelReadableOptions } from './model-readable';
+import { modelReadableKey, modelReadableLabel, modelReadableTheme, modelReadableVariant } from './model-readable';
 
 /**
  * <zh/> 超边：成员 + 任意属性（keywords、summary、type 等）
@@ -45,6 +48,20 @@ export interface LayoutSettings {
   preventLabelOverlap?: boolean;
   /** 以 centerNode 为布局中心，默认开；关闭后 centerNode 只决定颜色 / place centerNode at the center, on by default */
   useCenter?: boolean;
+  /**
+   * 打乱布局：给出种子时不用 type 指定的布局，按种子把顶点随机放进网格（成员关系不变，位置不含信息；中心也打乱），
+   * 画法（轮廓、多边形、超边节点）照常。同一种子结果相同
+   * Shuffle: with a seed, vertices go into random grid cells instead of the layout given by type (membership kept,
+   * positions carry no information; the center is shuffled too); drawing is unchanged. Same seed, same result
+   */
+  shuffleSeed?: number;
+  /**
+   * 力导类布局（'force'、'force-atlas2'，含图模式）的初始位置种子，默认 1：G6 的力导在节点没有初始位置时用 Math.random 撒点，
+   * 每次结果不同；这里按种子给出初始位置，同一份数据每次布局相同
+   * Seed of the initial positions of force layouts (graph mode included), 1 by default: G6's force scatters nodes with
+   * Math.random when they have no position; seeded initial positions make the result repeatable
+   */
+  seed?: number;
 }
 
 export interface SpecOptions {
@@ -105,7 +122,23 @@ export interface SpecOptions {
    */
   fadedNodes?: ID[];
   layout?: LayoutSettings;
+  /**
+   * 模型可读（MR）模式：实体标签为编号（加简称），超边带常显的 e 编号（轮廓旁的标签、连线标签、超边节点标签），
+   * 轮廓只描边、同色的超边轮换线型与深浅（见 modelReadableVariant），标签字号统一且不隐藏（布局为标签让位），标签不随缩放保持屏幕字号。
+   * 编号见 modelReadableKey，淡出枢纽的图例见 modelReadableLegend
+   * Model-readable (MR) mode: vertex labels are codes (plus short names), hyperedges carry always-visible e codes (tags by
+   * the contours, line labels, hyperedge node labels), contours are outlines with dashes once the palette repeats, labels
+   * are uniform and never hidden (the layout makes room for them) and scale with the canvas
+   */
+  modelReadable?: boolean | ModelReadableOptions;
 }
+
+/** 生效的主题：MR 模式下轮廓只描边 / effective theme, outline-only contours in MR mode */
+export const themeOf = (options: Pick<SpecOptions, 'theme' | 'modelReadable'>): HypergraphTheme => {
+  const theme = resolveTheme(options.theme);
+  const mr = options.modelReadable;
+  return mr ? modelReadableTheme(theme, mr === true ? {} : mr) : theme;
+};
 
 /**
  * <zh/> 淡出实体与只剩一个成员的超边的成员之间的一条虚线：hyperedges 为产生它的、只剩一个成员的超边
@@ -133,6 +166,11 @@ export type HypergraphSpec = Required<Pick<GraphOptions, 'data' | 'node' | 'edge
   faded: { nodes: NodeData[]; links: FadedLink[]; members: Map<ID, ID[]>; dropped: Map<ID, HyperedgeItem[]> };
   /** 超边节点 id → 超边 id（graphEdges: 'star'）/ hyperedge node id → hyperedge id, with graphEdges: 'star' */
   hyperedgeNodes: Map<ID, ID>;
+  /**
+   * MR 模式：编号表，以及要在轮廓旁放编号标签的超边（成员、颜色；布局后由视图放置）
+   * MR mode: the codes, and the hyperedges whose code tags go by their contours (placed by the view after layout)
+   */
+  modelReadable: { key: ModelReadableKey; tags: { id: ID; code: string; members: ID[]; color: string }[] } | null;
 };
 
 /** 淡出实体虚线的 id / id of a faded vertex's dashed link */
@@ -173,15 +211,20 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     centerNode,
     typeField = 'entity_type',
     graphEdges = 'binary',
-    labelText = (d: NodeData) => String(d.id),
+    labelText: nameText = (d: NodeData) => String(d.id),
     contours = true,
     contourBounds = 'key',
     contourNesting = false,
     nodeSizeBy = 'fixed',
-    labelBy = 'uniform',
     layout: layoutSettings = {},
   } = options;
-  const theme = resolveTheme(options.theme);
+  const theme = themeOf(options);
+  const mrOptions = options.modelReadable ? (options.modelReadable === true ? {} : options.modelReadable) : null;
+  const mrKey = mrOptions ? modelReadableKey(graph, { centerNode }) : null;
+  const mrTags: NonNullable<HypergraphSpec['modelReadable']>['tags'] = [];
+  // MR：标签为编号（加简称），统一字号
+  const labelText = mrKey ? (d: NodeData) => modelReadableLabel(mrKey, d.id, nameText(d), mrOptions!) : nameText;
+  const labelBy = mrKey ? 'uniform' : (options.labelBy ?? 'uniform');
   const isGraph = mode === 'graph';
   // 多边形画法：超边画成成员在角上的多边形 / polygon drawing: hyperedges as polygons with members at the corners
   const polygon = !isGraph && layoutSettings.type === POLYGON_LAYOUT;
@@ -214,6 +257,23 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   const starColors = new Map<ID, string>();
   const layoutHyperedges: { id: ID; weight: number; members: ID[] }[] = [];
   const plugins: { type: string; key: string; [key: string]: any }[] = [];
+
+  // MR：颜色相同的超边（调色板循环、或调用方按公司等分组着色）按出现顺序轮换线型与深浅，色相不变
+  // MR: hyperedges sharing a color cycle line dash and shade in order of appearance, keeping the hue
+  const baseColorOf = (id: ID, i: number) => options.hyperedgeColors?.[id] ?? theme.hyperedgeColors[i % theme.hyperedgeColors.length];
+  const mrVariants = new Map<ID, ReturnType<typeof modelReadableVariant>>();
+  if (mrKey) {
+    const ranks = new Map<string, number>();
+    graph.hyperedges.forEach((he, i) => {
+      const id = hyperedgeIdOf(he);
+      if (new Set(he.members).size < 3 || mrVariants.has(id)) return;
+      const base = baseColorOf(id, i);
+      const rank = ranks.get(base) ?? 0;
+      ranks.set(base, rank + 1);
+      mrVariants.set(id, modelReadableVariant(base, rank));
+    });
+  }
+  const colorOf = (id: ID, i: number) => mrVariants.get(id)?.color ?? baseColorOf(id, i);
 
   graph.hyperedges.forEach((he, i) => {
     const allMembers = [...new Set(he.members)];
@@ -253,7 +313,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       } else if (graphEdges === 'star') {
         const nodeId = hyperedgeNodeId(id);
         hyperedgeNodes.set(nodeId, id);
-        starColors.set(id, options.hyperedgeColors?.[id] ?? theme.hyperedgeColors[i % theme.hyperedgeColors.length]);
+        starColors.set(id, colorOf(id, i));
         starNodes.push({ ...attrs, id: nodeId, hyperedge: id, memberCount: members.length });
         members.forEach((m) => {
           const linkId = starLinkId(id, m);
@@ -263,7 +323,9 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       }
       return;
     }
-    const color = options.hyperedgeColors?.[id] ?? theme.hyperedgeColors[i % theme.hyperedgeColors.length];
+    const color = colorOf(id, i);
+    if (mrKey) mrTags.push({ id, code: mrKey.hyperedges.get(id)!, members, color });
+    const lineDash = mrVariants.get(id)?.lineDash;
     plugins.push({
       key: bubbleKeyOf(id),
       type: HOVER_BUBBLE_SETS,
@@ -278,6 +340,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       ...theme.bubble.normal,
       // 大的多边形在下、小的在上 / larger polygons below smaller ones
       ...(polygon && { polygon: true, zIndex: -1 - members.length / 1000, lineJoin: 'round', ...theme.polygonStroke.normal }),
+      ...(lineDash && { lineDash }),
     });
     layoutHyperedges.push({ id, weight: he.weight || members.length, members });
   });
@@ -357,21 +420,36 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
   const labelFontSizeOf: number | ((d: NodeData) => number) = byDegree
     ? (d: NodeData) => Math.round(theme.labelFontSize - 2 + 4 * levelOf(d.id))
     : theme.labelFontSize;
-  const nodeLabelText = hasStar ? (d: NodeData) => (isHyperedgeNode(d) ? '' : labelText(d)) : labelText;
+  // MR 模式下超边节点标 e 编号 / hyperedge nodes show their e code in MR mode
+  const nodeLabelText = hasStar
+    ? (d: NodeData) => (isHyperedgeNode(d) ? (mrKey?.hyperedges.get(hyperedgeNodes.get(d.id)!) ?? '') : labelText(d))
+    : labelText;
   const [lowFill, highFill] = theme.labelDegreeFill;
   const labelStyle = byDegree
     ? {
         labelFill: (d: NodeData) => mixColor(lowFill, highFill, levelOf(d.id)),
         labelFontWeight: (d: NodeData) => (d.id === centerNode ? 'bold' : 'normal'),
       }
-    : { labelFontWeight: 'normal' };
+    : mrKey
+      ? // MR：标签加白底，压在轮廓线上也读得出 / white label background so labels stay legible over contour lines
+        { labelFontWeight: 'normal', labelFill: '#111827', labelBackground: true, labelBackgroundFill: '#fff', labelBackgroundOpacity: 0.85, labelPadding: [0, 2] }
+      : { labelFontWeight: 'normal' };
 
   const layoutType = layoutSettings.type ?? (isGraph ? 'force' : HYPERGRAPH_LAYOUT);
   const layoutCenter = hasCenter && layoutSettings.useCenter !== false ? centerNode : undefined;
   // 节点大小不一时布局按各自大小防重叠
   const sizeOption = nodeSizeBy === 'degree' || hasStar ? { nodeSize: sizeOf } : {};
   let layout: Record<string, any>;
-  if (layoutType === 'circular') {
+  if (layoutSettings.shuffleSeed !== undefined) {
+    layout = {
+      type: SHUFFLE_LAYOUT,
+      seed: layoutSettings.shuffleSeed,
+      nodeSize: sizeOf,
+      nodeSpacing: layoutSettings.nodeSpacing ?? 50,
+      labelText: nodeLabelText,
+      labelFontSize: labelFontSizeOf,
+    };
+  } else if (layoutType === 'circular') {
     layout = { type: 'circular', ...sizeOption };
   } else if (layoutType === 'force-atlas2') {
     layout = { type: 'force-atlas2', preventOverlap: true, kr: 50, ...sizeOption };
@@ -383,7 +461,7 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
       centerNode: layoutCenter,
       nodeSpacing: layoutSettings.nodeSpacing ?? 50,
       // 标签互不重叠：与节点样式的 labelText、字号保持一致
-      preventLabelOverlap: layoutSettings.preventLabelOverlap ?? true,
+      preventLabelOverlap: mrKey ? true : (layoutSettings.preventLabelOverlap ?? true),
       labelText,
       labelFontSize: labelFontSizeOf,
       ...sizeOption,
@@ -403,11 +481,21 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
     layout = { type: 'force', preventOverlap: true, gravity: 50, linkDistance: 50, ...sizeOption };
   }
 
+  // 力导类布局按种子给初始位置（G6 把 style.x / y 交给布局作起点），结果可重复；其余布局本身是确定性的
+  if (layout.type === 'force' || layout.type === 'force-atlas2') {
+    const random = seededRandom(layoutSettings.seed ?? 1);
+    const side = Math.sqrt(nodes.length) * 50;
+    // style.x 为 0 时 G6 不当作位置，加 0.5 避开 / G6 ignores a zero coordinate
+    const at = () => (random() - 0.5) * side + 0.5;
+    nodes = nodes.map((n) => ({ ...n, style: { ...n.style, x: at(), y: at() } }));
+  }
+
   return {
     data: { nodes, edges },
     hyperedges,
     lineHyperedges,
     hyperedgeNodes,
+    modelReadable: mrKey && { key: mrKey, tags: mrTags },
     // 图模式 binary 去掉了没有连线的实体，连向它们的虚线一并去掉
     faded: { nodes: fadedNodes, links: [...fadedLinks.values()].filter((l) => drawnIds.has(l.target)), members: fadedMembers, dropped },
     plugins: isGraph || !contours ? [] : plugins,
@@ -455,6 +543,22 @@ export const toG6Spec = (graph: HypergraphData, options: SpecOptions = {}): Hype
         lineWidth: 1,
         opacity: 1,
         visibility: 'visible',
+        ...(mrKey && {
+          // MR：2 元超边的连线标 e 编号（同一对实体的多条超边逗号分隔）；团展开、超边节点的连线不标
+          labelText: (d: EdgeData) =>
+            (lineHyperedges.get(d.id!) || [])
+              .filter((he) => hyperedges.get(he)?.members.length === 2)
+              .map((he) => mrKey.hyperedges.get(he))
+              .join(','),
+          labelFontSize: theme.labelFontSize,
+          labelFill: '#111827',
+          labelAutoRotate: false,
+          labelBackground: true,
+          labelBackgroundFill: '#fff',
+          labelBackgroundStroke: theme.edgeColor,
+          labelBackgroundRadius: 3,
+          labelPadding: [1, 4],
+        }),
       } as any,
       state: {
         faded: { visibility: 'hidden' },

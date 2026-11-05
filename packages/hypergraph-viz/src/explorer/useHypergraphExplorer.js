@@ -3,6 +3,8 @@ import { filterHypergraph, hyperedgeColorsOf, hyperedgeIdOf, hypergraphStats, ov
 import { EMPTY_SELECTION, isEmptySelection } from '../selection';
 import { pairId } from '../spec';
 import { DEFAULT_THEME, typeColorsOf } from '../theme';
+import { modelReadableKey, modelReadableLabel, modelReadableLegend, modelReadableTable } from '../model-readable';
+import { exportMatrixImage } from '../export-image';
 import { DEFAULT_RENDER_SETTINGS, EMPTY_COLOR_OVERRIDES, useStoredState } from './settings.js';
 
 // faded：隐藏的实体中“淡出”的部分（不参与布局，悬停、选中相关元素时在画布上显示与它们的关联），其余彻底隐藏
@@ -473,6 +475,75 @@ export function useHypergraphExplorer({
         return text;
     }, [renderSettings.labelMode, renderSettings.labelMaxLength, renderSettings.labelStripType, stats, center]);
 
+    // 模型可读（MR）模式：编号与画布同一份数据、同一个中心，关联矩阵的行列标签、图例、导出的映射表共用
+    const modelReadable = useMemo(
+        () =>
+            renderSettings.modelReadable
+                ? { vertexLabel: renderSettings.mrVertexLabel, fillOpacity: renderSettings.mrFillOpacity ?? 0 }
+                : undefined,
+        [renderSettings.modelReadable, renderSettings.mrVertexLabel, renderSettings.mrFillOpacity]
+    );
+    const mrKey = useMemo(
+        () => (modelReadable && viewData ? modelReadableKey(viewData, { centerNode: center }) : null),
+        [modelReadable, viewData, center]
+    );
+    const matrixLabels = useMemo(() => {
+        if (!mrKey) return {};
+        const name = labelText ?? ((d) => String(d.id));
+        return {
+            labelText: (id) => modelReadableLabel(mrKey, id, name({ id }), modelReadable),
+            columnLabel: (he) => mrKey.hyperedges.get(he.id) ?? String(he.id),
+        };
+    }, [mrKey, labelText, modelReadable]);
+    const mrLegend = (locale) => (mrKey ? modelReadableLegend(mrKey, { faded: fadedNodes, locale }) : []);
+
+    // 导出 PNG（MR 模式下另附编号映射表 Markdown），文件名带中心实体与内容：
+    // canvas 当前画布（带图例）；matrix 关联矩阵（V-mat，不依赖画布，任何模式下可用）；dual 画布与矩阵并排（V-dual）
+    const exportModelReadable = async (locale = "en", target = "canvas") => {
+        if (!viewData) return;
+        let image;
+        if (target === "matrix") {
+            image = await exportMatrixImage(viewData, {
+                order: renderSettings.matrixOrder,
+                centerNode: center,
+                typeColors,
+                nodeColors: colorOverrides.nodes,
+                hyperedgeColors,
+                hubNodes: fadedNodes,
+                labelText: modelReadable && labelText ? (id) => labelText({ ...viewData.vertices[id], id }) : undefined,
+                modelReadable,
+                fontSize: modelReadable ? Math.max(12, renderSettings.labelFontSize) : renderSettings.labelFontSize,
+                locale,
+            });
+        } else {
+            const view = viewRef.current;
+            if (!view?.exportImage) return;
+            // 双视图两个面板并排，默认加宽，矩阵的标签不至于太小 / dual: wider by default so the matrix labels stay legible
+            image = await view.exportImage({
+                locale,
+                layout: target,
+                matrixOrder: renderSettings.matrixOrder,
+                width: target === "dual" ? 1536 : 1024,
+            });
+        }
+        const prefix = modelReadable ? "hypergraph-mr" : "hypergraph";
+        const base = `${prefix}-${target}-${String(center || "graph").replace(/[\\/:*?"<>|\s]+/g, "_")}`;
+        const save = (href, name) => {
+            const a = document.createElement("a");
+            a.href = href;
+            a.download = name;
+            a.click();
+        };
+        save(image.dataURL, `${base}.png`);
+        if (image.key) {
+            const table = modelReadableTable(viewData, image.key, { faded: fadedNodes, locale });
+            const url = URL.createObjectURL(new Blob([table], { type: "text/markdown;charset=utf-8" }));
+            save(url, `${base}.md`);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }
+        return image;
+    };
+
     const viewOptions = {
         mode: visualizationMode,
         centerNode: center,
@@ -491,6 +562,7 @@ export function useHypergraphExplorer({
         layout,
         labelText,
         theme,
+        modelReadable,
     };
 
     const onSelectionChange = (next, { hit }) => {
@@ -633,6 +705,8 @@ export function useHypergraphExplorer({
             viewRef,
             viewOptions,
             matrixOrder: renderSettings.matrixOrder,
+            matrixLabels,
+            mrLegend,
             selection,
             onSelectionChange,
             pinned: !isEmptySelection(selection),
@@ -659,6 +733,7 @@ export function useHypergraphExplorer({
             settings: renderSettings,
             setSettings: setRenderSettings,
             onResetSettings: () => setRenderSettings(renderDefaults),
+            onExportModelReadable: exportModelReadable,
             colors,
             selection,
             setSelection,
@@ -680,6 +755,7 @@ export function useHypergraphExplorer({
                 hyperedgeColors,
                 hubNodes: fadedNodes,
                 onSelectionChange,
+                ...matrixLabels,
             },
         },
     };

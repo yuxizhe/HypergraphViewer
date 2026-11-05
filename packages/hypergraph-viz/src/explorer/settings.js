@@ -25,6 +25,10 @@ export const DEFAULT_RENDER_SETTINGS = {
     labelOverlap: "hide",
     labelMaxLength: 0, // 标签最大字符数，超出截断；0 不限
     labelStripType: true, // 去掉最后一个冒号及之前的部分（「期间:NVDA:FY2026Q4」→「FY2026Q4」）
+    // 模型可读（MR）模式：实体、超边常显编号，轮廓只描边，标签不隐藏，淡出的枢纽写进图例；可导出 PNG + 编号映射表
+    modelReadable: false,
+    mrVertexLabel: "code+name", // code 只画编号 / code+name 编号加简称
+    mrFillOpacity: 0, // MR 模式轮廓填充透明度，0 只描边
 };
 
 // 用户改过的颜色：实体类型、单个实体、单条超边、超边类型

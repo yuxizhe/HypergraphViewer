@@ -18,13 +18,16 @@ module.exports = {
 
 export default defineConfig([
   {
-    entry: { index: 'src/index.ts', react: 'src/react.tsx', explorer: 'src/explorer.ts', admin: 'src/admin.ts' },
+    // node：Node 端无头渲染（Playwright），不进浏览器包 / node: headless rendering for Node (Playwright)
+    entry: { index: 'src/index.ts', react: 'src/react.tsx', explorer: 'src/explorer.ts', admin: 'src/admin.ts', node: 'src/node.ts' },
     format: ['esm', 'cjs'],
     dts: true,
     clean: true,
     splitting: true,
     sourcemap: true,
-    external: ['@antv/g6', 'react', 'react-dom'],
+    external: ['@antv/g6', 'react', 'react-dom', 'playwright'],
+    // node 入口用到 import.meta.url，CJS 版需要垫片 / the node entry uses import.meta.url, shimmed for CJS
+    shims: true,
   },
   // 经 <script> 引入的页面（如 Hypergraph-DB viewer）：读取全局 G6（UMD 包的 window.G6），暴露 window.HypergraphViz
   {

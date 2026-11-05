@@ -69,6 +69,11 @@ export const HypergraphView = forwardRef<View | null, HypergraphViewProps>(funct
       select: (id) => viewRef.current?.select(id),
       hover: (target) => viewRef.current?.hover(target),
       fitView: async (animate) => viewRef.current?.fitView(animate),
+      rendered: async () => viewRef.current?.rendered(),
+      exportImage: async (options) => {
+        if (!viewRef.current) throw new Error('[hypergraph-viz] view not mounted');
+        return viewRef.current.exportImage(options);
+      },
       destroy: () => viewRef.current?.destroy(),
     }),
     [],
@@ -101,15 +106,18 @@ export const HypergraphView = forwardRef<View | null, HypergraphViewProps>(funct
   const {
     data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
     nodeColors, hyperedgeColors, contours, contourBounds, contourNesting, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection, maxFitZoom,
+    modelReadable,
   } = options;
   useEffect(() => {
     viewRef.current?.update({
       data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
       nodeColors, hyperedgeColors, contours, contourBounds, contourNesting, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection, maxFitZoom,
+    modelReadable,
     });
   }, [
     data, mode, centerNode, typeField, typeColors, graphEdges, labelText, theme,
     nodeColors, hyperedgeColors, contours, contourBounds, contourNesting, nodeSizeBy, labelBy, hideOverlappingLabels, fadedNodes, layout, selection, maxFitZoom,
+    modelReadable,
   ]);
 
   const toolbarOptions = toolbar === true ? {} : toolbar || null;
