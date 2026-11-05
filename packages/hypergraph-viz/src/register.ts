@@ -8,6 +8,8 @@ import { ShuffleLayout } from './shuffle-layout';
 export const HYPERGRAPH_LAYOUT = 'hypergraph';
 export const POLYGON_LAYOUT = 'polygon';
 export const SHUFFLE_LAYOUT = 'shuffle';
+/** KelpFusion 画法：坐标沿用超图布局，只换超边的画法 / KelpFusion drawing on the hypergraph layout's coordinates */
+export const KELP_LAYOUT = 'kelp';
 
 let registered = false;
 let bubbleSetsOverridden = false;

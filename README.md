@@ -17,6 +17,7 @@ DEMO page: https://yuxizhe.github.io/HypergraphViewer/
   - Overlapping labels are hidden until hover or selection by default; the layout can also make room for every label
   - The same data always gives the same layout; force, ForceAtlas2 and circular layouts are also available in the Render panel
   - Polygon layout (after [HGPolyVis](https://arxiv.org/abs/2308.05043)): each hyperedge is a polygon with its members at the corners, refined toward regular, non-overlapping polygons
+  - KelpFusion layout: same coordinates as the hypergraph layout; a hyperedge is filled where its members are close and drawn as a single line where they are far, and stretches shared by several hyperedges run side by side
   - Hubs are faded out when a subgraph opens: the vertices behind forced overlaps (hyperedge pairs sharing 3+ members, triples sharing 2+), which overlap under any layout
 - 🧮 **Incidence Matrix**: one row per vertex, one column per hyperedge, members as dots joined by a line in the hyperedge's color:
   - Hubs that crowd the canvas are just full rows, so every hyperedge stays readable
@@ -152,7 +153,7 @@ src/                          # This app: <HypergraphExplorer> plus data source 
 
 1. **Choose a data source**: a sample dataset, a HIF file URL, or a local HIF file
 2. **Search and select vertices** in the left list
-3. **Toggle modes** between hypergraph and graph
+3. **Toggle modes** with the switch at the top: **Hypergraph** (contours), **Polygon** (HGPolyVis polygons), **Kelp** (KelpFusion), **Matrix** (incidence matrix) or **Graph** (nodes and lines). The first three are the same hypergraph view with different layouts, so they stay in sync with the Layout setting in the Render panel
 4. **Hover** over vertices, lines or contours for details; **click** a hyperedge to highlight it
 5. **Interact**: drag, zoom and pan
 

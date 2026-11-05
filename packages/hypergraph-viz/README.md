@@ -98,6 +98,7 @@ viewRef.current.fitView();           // 视图居中
 ```
 
 `layout.type` 还可以是 `'polygon'`（多边形画法，参考 HGPolyVis：在超图布局上优化，超边画成成员在角上的多边形）、
+`'kelp'`（KelpFusion 画法：坐标同超图布局，超边在成员挨得近的地方填成区域、离得远的地方只画一条线，多条超边共用的一段平行错开）、
 `'force'`（改造前的力导 + 主超边聚类）、`'force-atlas2'`、`'circular'`。
 `overlapHubs(graph)` 贪心挑出造成注定重叠的隐含枢纽，可传给 `fadedNodes`；`forcedOverlaps(graph)` 统计注定重叠数。
 数据或布局相关选项变化时重新布局；只有颜色、轮廓、主题配色变化时只重绘，节点位置不变。
@@ -205,7 +206,9 @@ const { png, table, labelPx } = await renderer.render({ data, centerNode, layout
 await renderer.close();
 ```
 
-命令行：`node scripts/render-mr.mjs --hif nvda.hif.json --top 3 --layout canvas,matrix,dual --out out/`。每张图输出 PNG 和 `.md` 映射表，并写一份 `manifest.jsonl`，记录尺寸、`labelPx` 和用时。中文标签依赖系统字体，Linux 上需要安装 CJK 字体。
+不用浏览器：`createSVGRenderer()`（同在 `hypergraph-viz/node`）的接口与上面相同。它先生成纯 SVG（`renderJobSVG`，Node 与浏览器里都能用），再用 `@napi-rs/canvas`（Skia，预编译，需另装）转成 PNG，每张图几十毫秒。`render` 另外返回 `svg` 和 `geometry`（节点坐标、标签框、编号标签框、轮廓路径），可用来计算可读性指标。超图模式与矩阵的坐标、轮廓、编号与浏览器版一致，标签宽度为估算。图模式不用力导布局，而是沿用超图布局的顶点坐标，超边节点放在成员质心附近。
+
+命令行：`node scripts/render-mr.mjs --hif nvda.hif.json --top 3 --layout canvas,matrix,dual --out out/`。默认用无头浏览器，`--renderer svg` 改用 SVG 渲染器，`--svg` 另存 `.svg` 文件。每张图输出 PNG 和 `.md` 映射表，并写一份 `manifest.jsonl`，记录尺寸、`labelPx` 和用时。中文标签依赖系统字体，Linux 上需要安装 CJK 字体。
 
 ## 只用其中一部分
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 // 右侧面板「渲染」Tab 的默认值；与 hypergraph-viz 的默认行为一致
 export const DEFAULT_RENDER_SETTINGS = {
-    layout: "hypergraph", // hypergraph | polygon（多边形画法 HGPolyVis）| force | force-atlas2 | circular
+    layout: "hypergraph", // hypergraph | polygon（多边形画法 HGPolyVis）| kelp（KelpFusion 画法）| force | force-atlas2 | circular
     useCenter: true,
     nodeSpacing: 50,
     maxFitZoom: 1, // 撑满画布时的最大放大倍数：节点少时不放大

@@ -1,6 +1,7 @@
 import type { GraphOptions, ID } from '@antv/g6';
 import { Graph, GraphEvent, Label } from '@antv/g6';
-import { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, SUPPRESS_CONTOUR_UPDATE } from './hover-bubble-sets';
+import { BUBBLE_SETS_TARGET, HOVER_BUBBLE_SETS, kelpShapesOf, SUPPRESS_CONTOUR_UPDATE } from './hover-bubble-sets';
+import { kelpAnchor } from './kelp';
 import { cullLabels } from './label-culling';
 import { registerHypergraph } from './register';
 import type { Selection } from './selection';
@@ -249,11 +250,16 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
 
   // 按选择与悬停给轮廓插件配置透明度档位
   const decoratePlugins = (plugins: any[], bubbles: Record<ID, string>) => {
-    const { bubble, polygonStroke } = themeOf(options);
+    const { bubble, polygonStroke, kelpStroke } = themeOf(options);
     return plugins.map((p: any) => {
       if (p.type !== HOVER_BUBBLE_SETS) return p;
       const level = bubbles[p.hyperedge?.id] ?? 'normal';
-      return { ...p, ...(bubble as any)[level], ...(p.polygon && (polygonStroke as any)[level]) };
+      return {
+        ...p,
+        ...(bubble as any)[level],
+        ...(p.polygon && (polygonStroke as any)[level]),
+        ...(p.kelp && (kelpStroke as any)[level]),
+      };
     });
   };
 
@@ -570,6 +576,10 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
         ...(text ? [{ x0: x - w / 2 - 2, y0: y + r, x1: x + w / 2 + 2, y1: y + r + fontSize * 1.3 }] : []),
       ];
     });
+    // KelpFusion：锚点落到它自己的线上 / with KelpFusion the anchor goes onto its own lines
+    const kelpPlugins = (spec.plugins as any[]).filter((p) => p.kelp && !p.polygon);
+    const kelpShapes = kelpPlugins.length ? kelpShapesOf(graph) : null;
+    const keyOf = new Map(kelpPlugins.map((p) => [p.hyperedge?.id, p.key]));
     const placed = placeTags(
       mr.tags.map(({ id, code, members }) => {
         const own = members.filter((m) => m !== options.centerNode && pos.has(m));
@@ -579,7 +589,10 @@ export const createHypergraphView = (container: HTMLElement, initial: ViewOption
           id,
           text: code,
           size: members.length,
-          anchor: { x: pts.reduce((a, p) => a + p[0], 0) / n, y: pts.reduce((a, p) => a + p[1], 0) / n },
+          anchor: ((c) => {
+            const shape = kelpShapes?.get(keyOf.get(id));
+            return shape ? kelpAnchor(shape, c) : c;
+          })({ x: pts.reduce((a, p) => a + p[0], 0) / n, y: pts.reduce((a, p) => a + p[1], 0) / n }),
         };
       }),
       obstacles,

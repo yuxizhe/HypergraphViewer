@@ -105,11 +105,15 @@
   },
   "peerDependencies": {
     "@antv/g6": ">=5.0.49 <5.1.0",
+    "@napi-rs/canvas": ">=0.1.50",
     "playwright": ">=1.40",
     "react": ">=18",
     "react-dom": ">=18"
   },
   "peerDependenciesMeta": {
+    "@napi-rs/canvas": {
+      "optional": true
+    },
     "playwright": {
       "optional": true
     },
@@ -122,6 +126,7 @@
   },
   "devDependencies": {
     "@antv/g6": "5.0.49",
+    "@napi-rs/canvas": "^1.0.13",
     "@tailwindcss/postcss": "^4.1.16",
     "@types/node": "^26.6.5",
     "@types/react": "^19.1.16",
@@ -132,5 +137,8 @@
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "bubblesets-js": "^2.3.4"
   }
 }

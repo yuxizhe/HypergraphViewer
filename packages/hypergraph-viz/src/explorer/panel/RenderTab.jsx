@@ -77,9 +77,10 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
     const set = (key) => (value) => setSettings((s) => ({ ...s, [key]: value }));
     const isHyper = mode === "hyper";
     const isMatrix = mode === "matrix";
-    // 多边形布局也以超图布局为起点，节点间距、中心实体同样生效
-    const hypergraphLayout = isHyper && (settings.layout === "hypergraph" || settings.layout === "polygon");
+    // 多边形、KelpFusion 也以超图布局为起点，节点间距、中心实体同样生效
+    const hypergraphLayout = isHyper && ["hypergraph", "polygon", "kelp"].includes(settings.layout);
     const polygon = isHyper && settings.layout === "polygon";
+    const kelp = isHyper && settings.layout === "kelp";
     // 超边颜色用于轮廓、超边节点（图模式 star）和矩阵的列
     const hyperedgeColored = isMatrix || (isHyper ? settings.contours : settings.graphEdges === "star");
 
@@ -159,12 +160,13 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
             <Group title={t("groupLayout")}>
                 <Row label={t("layoutAlgorithm")} relayout disabled={isMatrix}>
                     <select
-                        value={!isHyper && (settings.layout === "hypergraph" || settings.layout === "polygon") ? "force" : settings.layout}
+                        value={!isHyper && ["hypergraph", "polygon", "kelp"].includes(settings.layout) ? "force" : settings.layout}
                         onChange={(e) => set("layout")(e.target.value)}
                         className="text-xs border-gray-300 rounded-md py-0.5 pl-2 pr-7"
                     >
                         {isHyper && <option value="hypergraph">{t("layoutHypergraph")}</option>}
                         {isHyper && <option value="polygon">{t("layoutPolygon")}</option>}
+                        {isHyper && <option value="kelp">{t("layoutKelp")}</option>}
                         <option value="force">{t("layoutForce")}</option>
                         <option value="force-atlas2">ForceAtlas2</option>
                         <option value="circular">{t("layoutCircular")}</option>
@@ -203,20 +205,21 @@ const RenderTab = ({ settings, setSettings, mode, hasCenter, onResetSettings, on
                     <div className="text-[11px] text-gray-400">{t("forceHint")}</div>
                 )}
                 {polygon && <div className="text-[11px] text-gray-400">{t("polygonHint")}</div>}
+                {kelp && <div className="text-[11px] text-gray-400">{t("kelpHint")}</div>}
             </Group>
 
             <Group title={t("groupHyperedge")}>
                 <Row label={t("showContours")} disabled={!isHyper}>
                     <Switch checked={settings.contours} onChange={set("contours")} />
                 </Row>
-                <Row label={t("contourBounds")} disabled={!isHyper || !settings.contours || polygon}>
+                <Row label={t("contourBounds")} disabled={!isHyper || !settings.contours || polygon || kelp}>
                     <Segmented
                         value={settings.contourBounds}
                         onChange={set("contourBounds")}
                         options={[["key", t("boundsKey")], ["render", t("boundsRender")]]}
                     />
                 </Row>
-                <Row label={t("contourNesting")} disabled={!isHyper || !settings.contours || polygon}>
+                <Row label={t("contourNesting")} disabled={!isHyper || !settings.contours || polygon || kelp}>
                     <span title={t("contourNestingHint")}>
                         <Switch checked={settings.contourNesting} onChange={set("contourNesting")} />
                     </span>
