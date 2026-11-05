@@ -28,20 +28,38 @@ const Counts = ({ explorer, className = "" }) => {
 // 模式 → [模式名, 标题]
 const MODE_KEYS = { hyper: ["modeHyper", "titleHyper"], graph: ["modeGraph", "titleGraph"], matrix: ["modeMatrix", "titleMatrix"] };
 
+// 顶部模式：超图 / 多边形 / KelpFusion 都属于超图模式，只是布局（画法）不同
+const MODE_TABS = [
+    { key: "hyper", mode: "hyper", layout: "hypergraph", label: "modeHyper" },
+    { key: "polygon", mode: "hyper", layout: "polygon", label: "layoutPolygonShort" },
+    { key: "kelp", mode: "hyper", layout: "kelp", label: "layoutKelp" },
+    { key: "matrix", mode: "matrix", label: "modeMatrix" },
+    { key: "graph", mode: "graph", label: "modeGraph" },
+];
+
 const ModeSwitch = ({ explorer, small }) => {
     const { t } = useI18n();
     const { mode, setMode } = explorer;
+    const { settings, setSettings } = explorer.inspectorProps;
+    const special = settings.layout === "polygon" || settings.layout === "kelp";
+    const isActive = (tab) =>
+        tab.mode !== mode ? false : tab.mode !== "hyper" ? true : tab.layout === "hypergraph" ? !special : settings.layout === tab.layout;
+    const select = (tab) => {
+        setMode(tab.mode);
+        // 切到超图/多边形/Kelp 时设置布局；切到其他模式时，多边形/Kelp 布局回到超图布局
+        if (tab.layout) setSettings((s) => ({ ...s, layout: tab.layout }));
+    };
     return (
         <div className="flex space-x-1 shrink-0">
-            {["hyper", "matrix", "graph"].map((m) => (
+            {MODE_TABS.map((tab) => (
                 <button
-                    key={m}
-                    onClick={() => setMode(m)}
+                    key={tab.key}
+                    onClick={() => select(tab)}
                     className={`${small ? "px-2.5" : "px-3"} py-1 text-xs rounded-full transition-all duration-200 ${
-                        mode === m ? "bg-primary-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        isActive(tab) ? "bg-primary-500 text-white shadow-md" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                     }`}
                 >
-                    {t(MODE_KEYS[m][0])}
+                    {t(tab.label)}
                 </button>
             ))}
         </div>
