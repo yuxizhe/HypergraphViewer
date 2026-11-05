@@ -25,7 +25,7 @@ export default defineConfig([
     clean: true,
     splitting: true,
     sourcemap: true,
-    external: ['@antv/g6', 'react', 'react-dom', 'playwright'],
+    external: ['@antv/g6', 'react', 'react-dom', 'playwright', '@napi-rs/canvas'],
     // node 入口用到 import.meta.url，CJS 版需要垫片 / the node entry uses import.meta.url, shimmed for CJS
     shims: true,
   },

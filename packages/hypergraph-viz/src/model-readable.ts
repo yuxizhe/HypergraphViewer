@@ -82,6 +82,11 @@ export const modelReadableTheme = (theme: HypergraphTheme, { fillOpacity = 0 }: 
     highlight: { strokeOpacity: 1, lineWidth: 3.5 },
     dimmed: { strokeOpacity: 0.15, lineWidth: 1.5 },
   },
+  kelpStroke: {
+    normal: { strokeOpacity: 1, lineWidth: 3 },
+    highlight: { strokeOpacity: 1, lineWidth: 4 },
+    dimmed: { strokeOpacity: 0.15, lineWidth: 1.5 },
+  },
 });
 
 // #rrggbb 向黑（t < 0）或向白（t > 0）混合；其他写法原样返回 / mix a #rrggbb color toward black (t < 0) or white (t > 0)

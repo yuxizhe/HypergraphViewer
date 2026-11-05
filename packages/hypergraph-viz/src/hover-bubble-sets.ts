@@ -9,13 +9,16 @@
  *   npm 版基类的 update 只合并配置、不重画；
  * - graph 上的 SUPPRESS_CONTOUR_UPDATE 计数大于 0 时（只改样式、状态），不因元素更新而重算轮廓；
  * - 成员的元素还没创建时（换数据过程中，G6 先更新已有元素、后创建新元素）不重算，等 AFTER_RENDER 再画；
- * - polygon 为 true 时画成多边形（HGPolyVis）：成员按绕质心的角度连成，每个成员都在角上，不经 bubble-sets 计算。
+ * - polygon 为 true 时画成多边形（HGPolyVis）：成员按绕质心的角度连成，每个成员都在角上，不经 bubble-sets 计算；
+ * - kelp 为 true 时画成 KelpFusion（见 kelp.ts）：同一画布上所有 kelp 超边一起计算（共用的一段要平行错开），结果按坐标缓存。
  * 以新类型名 'hover-bubble-sets' 注册，不覆盖 G6 内置的 'bubble-sets'。
  */
 import type { BubbleSetsOptions, ID } from '@antv/g6';
 import { CommonEvent, GraphEvent } from '@antv/g6';
 // 基类换成支持 memberBoundsType: 'key' 的版本（只圈节点、不包裹标签）
 import { KeyBoundsBubbleSets } from './bubble-sets-key';
+import type { KelpShape } from './kelp';
+import { kelpFusion, kelpPathArray } from './kelp';
 import { polygonOrder } from './polygon-layout';
 
 export const HOVER_BUBBLE_SETS = 'hover-bubble-sets';
@@ -32,6 +35,30 @@ const SHAPE_EVENTS = [
   CommonEvent.WHEEL,
 ];
 
+// 每个画布上所有 kelp 超边的形状，按"成员 + 节点坐标"的签名缓存：各超边的插件分别取用，只算一次
+// Kelp shapes of all kelp hyperedges per graph, cached by members and node positions; computed once for all plugins
+const kelpCache = new WeakMap<object, { sig: string; shapes: Map<ID, KelpShape> }>();
+
+export const kelpShapesOf = (graph: any): Map<ID, KelpShape> => {
+  const plugins = ((graph.getOptions().plugins || []) as any[]).filter((p) => p?.type === HOVER_BUBBLE_SETS && p.kelp);
+  // 淡出的实体不画，也不作为要绕开的障碍 / faded vertices are not drawn and not obstacles
+  const nodes = (graph.getNodeData() as { id: ID }[]).filter((d) => !(graph.getElementState(d.id) || []).includes('faded'));
+  const pos = new Map<ID, [number, number]>(nodes.map((d) => [d.id, graph.getElementPosition(d.id) as [number, number]]));
+  const sig =
+    plugins.map((p) => `${p.key}:${p.members.join(',')}`).join('|') +
+    '#' +
+    [...pos].map(([id, [x, y]]) => `${id}@${x.toFixed(1)},${y.toFixed(1)}`).join(';');
+  const cached = kelpCache.get(graph);
+  if (cached?.sig === sig) return cached.shapes;
+  const shapes = kelpFusion(
+    plugins.map((p) => ({ id: p.key, members: p.members })),
+    (id) => pos.get(id),
+    [...pos.keys()],
+  );
+  kelpCache.set(graph, { sig, shapes });
+  return shapes;
+};
+
 export class HoverBubbleSets extends KeyBoundsBubbleSets {
   private layouting = false;
 
@@ -39,7 +66,7 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
 
   constructor(
     context: ConstructorParameters<typeof KeyBoundsBubbleSets>[0],
-    options: BubbleSetsOptions & { memberBoundsType?: 'render' | 'key'; polygon?: boolean },
+    options: BubbleSetsOptions & { memberBoundsType?: 'render' | 'key'; polygon?: boolean; kelp?: boolean },
   ) {
     super(context, { zIndex: -1, pointerEvents: 'all', ...options } as typeof options);
     // 基类的 shape / init / drawBubbleSets 均为 private，这里统一经 self 访问
@@ -48,6 +75,10 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
     // 多边形画法：按成员当前位置直接连成多边形 / polygon drawing: straight from the members' current positions
     const getPath = self.getPath;
     self.getPath = (...args: unknown[]) => {
+      if (self.options.kelp && !self.options.polygon) {
+        const shape = kelpShapesOf(graph).get(self.options.key);
+        return shape ? kelpPathArray(shape) : [['M', 0, 0]];
+      }
       if (!self.options.polygon) return getPath(...args);
       const points = polygonOrder(self.options.members as ID[], (id) => graph.getElementPosition(id) as [number, number]);
       return [
@@ -111,6 +142,7 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
     const self = this as any;
     const prevMembers = this.options.members;
     const prevPolygon = (this.options as any).polygon;
+    const prevKelp = (this.options as any).kelp;
     super.update(options);
     // 成员变了（换数据、隐藏实体）：清掉按旧成员缓存的区域。否则基类在算新路径时要先移除旧成员，
     // 对已删除的节点调用 graph.getElementType 会抛 "Unknown element type"
@@ -119,7 +151,9 @@ export class HoverBubbleSets extends KeyBoundsBubbleSets {
       self.init();
     }
     // 换了画法：按新画法重画 / drawing switched between bubble and polygon: redraw
-    if ('polygon' in options && (options as any).polygon !== prevPolygon && self.shape && !self.shape.destroyed) {
+    const switched =
+      ('polygon' in options && (options as any).polygon !== prevPolygon) || ('kelp' in options && (options as any).kelp !== prevKelp);
+    if (switched && self.shape && !self.shape.destroyed) {
       self.drawBubbleSets();
       return;
     }

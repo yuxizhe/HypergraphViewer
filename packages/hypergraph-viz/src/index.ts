@@ -10,7 +10,7 @@ export type { Hyperedge, HypergraphLayoutOptions } from './layout';
 export { charWidth, HypergraphLayout } from './layout';
 export type { PolygonLayoutOptions } from './polygon-layout';
 export { PolygonLayout, polygonOrder } from './polygon-layout';
-export { HYPERGRAPH_LAYOUT, POLYGON_LAYOUT, registerHypergraph, SHUFFLE_LAYOUT } from './register';
+export { HYPERGRAPH_LAYOUT, KELP_LAYOUT, POLYGON_LAYOUT, registerHypergraph, SHUFFLE_LAYOUT } from './register';
 export type { ShuffleLayoutOptions } from './shuffle-layout';
 export { seededRandom, ShuffleLayout } from './shuffle-layout';
 export type { BubbleLevel, Selection, SelectionStyles } from './selection';
@@ -25,6 +25,12 @@ export type { HypergraphHit, HypergraphView, ViewExportOptions, ViewOptions } fr
 export type { ExportedImage, ExportImageOptions, ImagePanel } from './export-image';
 export { composeImage, exportMatrixImage, svgDataURL } from './export-image';
 export type { MatrixSVG, MatrixSVGOptions } from './matrix-svg';
+export type { HypergraphSVG, HypergraphSVGOptions, SVGPanel } from './svg-render';
+export type { KelpOptions, KelpSet, KelpShape } from './kelp';
+export { kelpAnchor, kelpFusion, kelpPathArray, kelpPathString } from './kelp';
+export { bubblePath, closedSpline, composeSVG, renderHypergraphSVG, SVG_FONT_FAMILY } from './svg-render';
+export type { RenderJob, SVGRenderResult } from './render-job';
+export { prepareJob, renderJobSVG } from './render-job';
 export { incidenceMatrixSVG } from './matrix-svg';
 export type { ModelReadableKey, ModelReadableOptions } from './model-readable';
 export {
